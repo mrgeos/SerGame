@@ -552,20 +552,44 @@ SG.Art = (function () {
     return o;
   }
 
-  function geos() {   // аватарка друга в уведомлении
-    var o = cv(22, 22), g = o.g;
-    ellipse(g, 11, 12, 7, 7, P.skin);    // лицо
-    px(g, 4, 11, 3, 4, P.skinD);         // тень
-    rows(g, [[3, 5, 12], [4, 4, 14], [5, 4, 14]], '#3d84e0');   // кепка
-    px(g, 4, 6, 15, 2, '#2f66b0');       // козырёк
-    px(g, 10, 3, 3, 2, '#2f66b0');
-    px(g, 8, 10, 2, 2, P.out);           // глаза
-    px(g, 13, 10, 2, 2, P.out);
-    px(g, 8, 14, 1, 1, P.out);           // улыбка
-    px(g, 9, 15, 4, 1, P.out);
-    px(g, 13, 14, 1, 1, P.out);
-    px(g, 5, 19, 13, 3, P.plant);        // воротник
-    px(g, 10, 18, 3, 2, P.skinD);        // шея
+  /* Аватарка Геоса: тёмные волосы назад, густая борода, косуха */
+  function geos() {
+    var o = cv(22, 24), g = o.g;
+    var hairG = '#3a2a20', beardG = '#4a3226', leather = '#1c1822', leatherL = '#332d3d';
+
+    // косуха с воротником
+    px(g, 2, 19, 18, 5, leather);
+    px(g, 2, 19, 18, 1, leatherL);
+    px(g, 6, 19, 4, 4, leatherL);        // отворот
+    px(g, 12, 19, 4, 4, leatherL);
+    px(g, 9, 18, 4, 3, P.skinD);         // шея
+
+    // лицо
+    ellipse(g, 11, 10, 7, 8, P.skin);
+    px(g, 4, 8, 2, 5, P.skinD);
+
+    // волосы: короткие бока, зачёсаны наверх
+    rows(g, [[1, 6, 10], [2, 4, 14], [3, 3, 16], [4, 3, 16]], hairG);
+    px(g, 3, 5, 2, 5, hairG);
+    px(g, 17, 5, 2, 5, hairG);
+    px(g, 9, 0, 6, 2, hairG);
+
+    // борода: скулы, усы и подбородок одним куском
+    rows(g, [[12, 4, 14], [13, 4, 14], [14, 4, 14], [15, 5, 12],
+             [16, 6, 10], [17, 7, 8]], beardG);
+    px(g, 4, 8, 2, 5, beardG);           // бакенбарды
+    px(g, 17, 8, 2, 5, beardG);
+
+    // брови, глаза, нос, рот
+    px(g, 6, 7, 4, 1, hairG);
+    px(g, 12, 7, 4, 1, hairG);
+    px(g, 7, 9, 2, 2, P.out);
+    px(g, 13, 9, 2, 2, P.out);
+    px(g, 7, 9, 1, 1, P.white);
+    px(g, 13, 9, 1, 1, P.white);
+    px(g, 10, 11, 2, 1, P.skinD);
+    px(g, 9, 14, 5, 1, '#7a4a48');       // губы в бороде
+
     return outline(o, P.out);
   }
 
@@ -593,35 +617,94 @@ SG.Art = (function () {
     return outline(o, P.out);
   }
 
-  function person(kind) {   // 'wife' | 'daughter'
-    var big = kind === 'wife';
-    var o = cv(big ? 30 : 22, big ? 46 : 34), g = o.g;
-    var hairCol = big ? '#7a4326' : '#a8642f';
-    var dress = big ? '#c2547f' : '#57a8c8';
+  /* Таня: тёмные волосы, собранные в пучок наверху, светлый верх, джинсы */
+  function wife() {
+    var o = cv(28, 34), g = o.g;
+    var top = '#e9edf5', topD = '#ccd3e3', topB = '#a8cfe8', jean = '#2c3550';
 
-    if (big) {
-      px(g, 9, 40, 5, 6, P.jeanD); px(g, 16, 40, 5, 6, P.jeanD);
-      px(g, 8, 20, 14, 21, dress);
-      px(g, 6, 22, 4, 12, dress);  px(g, 20, 22, 4, 12, dress);
-      px(g, 5, 32, 4, 5, P.skin);  px(g, 21, 32, 4, 5, P.skin);
-      px(g, 10, 8, 11, 12, P.skin);
-      px(g, 8, 4, 15, 8, hairCol);
-      px(g, 7, 8, 4, 16, hairCol);
-      px(g, 21, 8, 4, 16, hairCol);
-      px(g, 12, 13, 2, 2, P.out); px(g, 17, 13, 2, 2, P.out);
-      px(g, 13, 17, 5, 2, P.pinkD);
-    } else {
-      px(g, 6, 28, 4, 6, P.jeanD); px(g, 12, 28, 4, 6, P.jeanD);
-      px(g, 5, 16, 12, 13, dress);
-      px(g, 2, 10, 4, 9, P.skin);  px(g, 16, 10, 4, 9, P.skin);   // ручки вверх
-      px(g, 6, 6, 10, 10, P.skin);
-      px(g, 4, 2, 14, 6, hairCol);
-      px(g, 3, 6, 3, 10, hairCol);
-      px(g, 16, 6, 3, 10, hairCol);
-      px(g, 2, 1, 4, 3, P.pink);   // бантик
-      px(g, 8, 10, 2, 2, P.out); px(g, 13, 10, 2, 2, P.out);
-      px(g, 9, 13, 4, 2, P.pinkD);
-    }
+    // ноги и обувь
+    px(g, 9, 27, 4, 5, jean);  px(g, 15, 27, 4, 5, jean);
+    px(g, 9, 27, 1, 5, P.out); px(g, 15, 27, 1, 5, P.out);
+    px(g, 8, 31, 6, 3, P.out); px(g, 14, 31, 6, 3, P.out);
+
+    // кофта
+    px(g, 7, 17, 14, 11, top);
+    px(g, 7, 17, 3, 11, topD);
+    px(g, 9, 20, 2, 2, topB);          // голубой узор
+    px(g, 13, 23, 2, 2, topB);
+    px(g, 17, 19, 2, 2, topB);
+    px(g, 11, 25, 2, 2, topB);
+    // руки
+    px(g, 4, 18, 3, 8, top);   px(g, 21, 18, 3, 8, top);
+    px(g, 4, 18, 1, 8, topD);
+    px(g, 4, 26, 3, 3, P.skin); px(g, 21, 26, 3, 3, P.skin);
+
+    // шея и цепочка
+    px(g, 12, 15, 4, 3, P.skinD);
+    px(g, 11, 17, 6, 1, P.gold);
+
+    // голова
+    px(g, 9, 6, 10, 10, P.skin);
+    px(g, 9, 6, 2, 10, P.skinD);
+    // волосы: чёлка зачёсана назад, пучок наверху
+    px(g, 8, 4, 12, 3, P.hair);
+    px(g, 8, 6, 2, 7, P.hair);
+    px(g, 18, 6, 2, 7, P.hair);
+    ellipse(g, 15, 2, 4, 3, P.hair);
+    px(g, 13, 4, 5, 1, P.hairD);       // резинка
+    // серёжки
+    px(g, 8, 12, 1, 1, P.gold); px(g, 19, 12, 1, 1, P.gold);
+    // брови и глаза держим на разных строках, иначе сливаются в маску
+    px(g, 11, 9, 3, 1, P.hairD);  px(g, 15, 9, 3, 1, P.hairD);
+    px(g, 11, 11, 2, 2, P.out);   px(g, 16, 11, 2, 2, P.out);
+    px(g, 14, 13, 1, 1, P.skinD);
+    px(g, 13, 14, 3, 1, P.pinkD);
+
+    return outline(o, P.out);
+  }
+
+  /* Майя, 2 года: большая голова, светлый пушок, платье в цветочек,
+   * одна рука тянется вперёд — как на фото */
+  function daughter() {
+    var o = cv(22, 25), g = o.g;
+    var hairB = '#ecd9b0', hairBL = '#f7ecd2';
+    var dress = '#f7f0e2', dressD = '#e0d5c0';
+
+    // ноги и башмачки
+    px(g, 7, 20, 3, 3, P.skin); px(g, 12, 20, 3, 3, P.skin);
+    px(g, 6, 22, 5, 3, P.pinkD); px(g, 11, 22, 5, 3, P.pinkD);
+
+    // платье-разлетайка
+    rows(g, [[13, 6, 10], [14, 5, 12], [15, 5, 12], [16, 4, 14],
+             [17, 4, 14], [18, 3, 16], [19, 3, 16]], dress);
+    rows(g, [[16, 4, 3], [17, 4, 3], [18, 3, 3], [19, 3, 3]], dressD);
+    // цветочки
+    px(g, 7, 15, 2, 2, P.pink);  px(g, 12, 14, 2, 2, '#d05a6a');
+    px(g, 5, 18, 2, 2, '#d05a6a'); px(g, 14, 17, 2, 2, P.pink);
+    px(g, 10, 18, 2, 2, '#8fae7a');
+
+    // ручки: одна тянется вперёд, вторая вдоль тела
+    px(g, 16, 11, 4, 3, P.skin);
+    px(g, 19, 9, 3, 3, P.skin);
+    px(g, 1, 14, 3, 5, P.skin);
+
+    // голова
+    ellipse(g, 11, 8, 7, 7, P.skin);
+    px(g, 4, 6, 2, 5, P.skinD);
+    px(g, 3, 8, 1, 3, P.skinD); px(g, 18, 8, 1, 3, P.skinD);   // ушки
+    // редкий светлый пушок
+    rows(g, [[1, 7, 8], [2, 5, 12], [3, 4, 14]], hairB);
+    px(g, 8, 0, 3, 2, hairBL); px(g, 12, 1, 2, 1, hairBL);
+    // большие глаза
+    px(g, 7, 7, 2, 3, P.out);  px(g, 13, 7, 2, 3, P.out);
+    px(g, 7, 7, 1, 1, P.white); px(g, 13, 7, 1, 1, P.white);
+    // румянец
+    px(g, 5, 10, 2, 2, '#f0a0a0'); px(g, 15, 10, 2, 2, '#f0a0a0');
+    // улыбка с двумя нижними зубками
+    px(g, 8, 11, 6, 3, '#8a3a4a');
+    px(g, 9, 13, 2, 1, P.white); px(g, 12, 13, 1, 1, P.white);
+    px(g, 10, 9, 1, 1, P.skinD);       // носик
+
     return outline(o, P.out);
   }
 
@@ -847,8 +930,8 @@ SG.Art = (function () {
     fx_sparkc:   function () { return spark(P.cyan); },
 
     cake:        cake,
-    wife:        function () { return person('wife'); },
-    daughter:    function () { return person('daughter'); },
+    wife:        wife,
+    daughter:    daughter,
 
     sky0:        function () { return skyTex('#2b2545', '#54406b'); },
     sky1:        function () { return skyTex('#3d3060', '#e08a5c'); },

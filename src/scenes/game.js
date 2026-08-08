@@ -464,8 +464,10 @@ SG.GameScene = new Phaser.Class({
     if (this.phase === 'dead') return;
     if (now < this.hero.invulnUntil) return;
     if (this.gift.hatOn || this.cinematic) return;      // в шапке-дурилке урона нет
-    // Геос уже написал — до шапки добить не дадим, иначе подгон бессмыслен
+    // Геос уже написал — добить до того, как подгон дойдёт, не дадим,
+    // иначе вся страховка бессмысленна
     if (this.gift.hatOffered && !this.gift.hatWorn) return;
+    if (this.gift.dragonOffered && !this.gift.dragonUsed) return;
 
     this.lives--;
     this.combo = 0;
@@ -732,6 +734,13 @@ SG.GameScene = new Phaser.Class({
 
     this.geosMessage(C.geos.dragonMsg, 2600);
 
+    // сносим летящие таски, чтобы подгон было видно
+    for (var i = this.ents.length - 1; i >= 0; i--) {
+      if (this.ents[i].kind === 'shot') this.killEnt(this.ents[i], i, true);
+    }
+    // страховка: если дракона почему-то не подобрали — зовём сами
+    this.dragonDeadline = this.time.now + 11000;
+
     this.time.delayedCall(1400, function () {
       if (self.phase !== 'boss' || self.gift.dragonUsed) return;
       var y = self.G - 75;
@@ -887,6 +896,11 @@ SG.GameScene = new Phaser.Class({
         this.bossElapsed > SG.CFG.dragon.stallSec &&
         b.hp > b.maxHp * SG.CFG.dragon.stallHpFrac) {
       this.offerDragon();
+    }
+    if (this.gift.dragonOffered && !this.gift.dragonUsed &&
+        this.dragonDeadline && now > this.dragonDeadline) {
+      this.dragonFinish();
+      return;
     }
 
     var atk = now < this.hero.attackUntil;

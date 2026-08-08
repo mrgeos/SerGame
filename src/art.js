@@ -1,0 +1,738 @@
+/* Пиксель-арт, который рисуется кодом.
+ *
+ * Каждая текстура регистрируется под ключом (см. SG.Art.KEYS).
+ * Если в assets/sprites/<ключ>.png положить картинку — загрузчик (boot.js)
+ * возьмёт её вместо нарисованной. Логика игры при этом не меняется.
+ */
+window.SG = window.SG || {};
+
+SG.Art = (function () {
+  'use strict';
+
+  var P = {
+    out:    '#171223',
+    skin:   '#f0bd93', skinD: '#cf9469',
+    hair:   '#4a3226', hairD: '#33221a',
+    tee:    '#25222f', teeL:  '#3a3650',
+    jean:   '#3b5c9e', jeanD: '#2b4478',
+    boot:   '#3c2f28',
+    gtr:    '#e33d3d', gtrD:  '#a52a2a', gtrHi: '#ff8a76',
+    neck:   '#8a5a34', fret:  '#3b2818', str:   '#efe9dd',
+    zSkin:  '#93c46b', zSkinD:'#6d9749',
+    suit:   '#4b4864', suitD: '#33314a',
+    shirtW: '#e2e6f2', tie:   '#bd3a32',
+    paper:  '#f5f0e3', ink:   '#3b3652', inkL: '#8b86a4',
+    blue:   '#3d84e0', red:   '#e04b4b', green: '#4fb06a', violet: '#9a5ad0',
+    gold:   '#f5c542', goldD: '#c99a1e',
+    white:  '#ffffff', cyan:  '#7de8ff',
+    cream:  '#fff3e4', pink:  '#f2a8c0', pinkD: '#d3768f',
+    cherry: '#e0364f', choco: '#6b4231',
+    grey:   '#6f6b84', greyD: '#4a4760', greyL: '#9d99b4',
+    plant:  '#3f8f57', plantD:'#2b6b3e',
+    wood:   '#7a5330', woodD: '#553719',
+    brick:  '#8d5f4d', night: '#2a2440'
+  };
+
+  /* ---- микро-хелперы для рисования ------------------------------------ */
+
+  function cv(w, h) {
+    var c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    var g = c.getContext('2d');
+    g.imageSmoothingEnabled = false;
+    return { c: c, g: g, w: w, h: h };
+  }
+
+  function px(g, x, y, w, h, col) {
+    g.fillStyle = col;
+    g.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h));
+  }
+
+  /* Толстая «пиксельная» линия — для грифа гитары, веток и т.п. */
+  function line(g, x0, y0, x1, y1, t, col) {
+    x0 = Math.round(x0); y0 = Math.round(y0); x1 = Math.round(x1); y1 = Math.round(y1);
+    var dx = Math.abs(x1 - x0), dy = Math.abs(y1 - y0);
+    var sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
+    var err = dx - dy;
+    for (;;) {
+      px(g, x0, y0, t, t, col);
+      if (x0 === x1 && y0 === y1) break;
+      var e2 = 2 * err;
+      if (e2 > -dy) { err -= dy; x0 += sx; }
+      if (e2 < dx)  { err += dx; y0 += sy; }
+    }
+  }
+
+  /* Заливка по строкам: rows = [[y, x, w], ...] — так удобно лепить формы */
+  function rows(g, list, col) {
+    for (var i = 0; i < list.length; i++) px(g, list[i][1], list[i][0], list[i][2], 1, col);
+  }
+
+  function ellipse(g, cx, cy, rx, ry, col) {
+    for (var y = -ry; y <= ry; y++) {
+      var w = Math.floor(rx * Math.sqrt(Math.max(0, 1 - (y * y) / (ry * ry))));
+      if (w > 0) px(g, cx - w, cy + y, w * 2, 1, col);
+    }
+  }
+
+  function ring(g, cx, cy, r, t, col) {
+    for (var a = 0; a < 360; a += 4) {
+      var rad = a * Math.PI / 180;
+      px(g, cx + Math.cos(rad) * r, cy + Math.sin(rad) * r, t, t, col);
+    }
+  }
+
+  /* Обводка непрозрачных пикселей — придаёт спрайтам «мультяшность» */
+  function outline(o, col) {
+    var g = o.g, w = o.w, h = o.h;
+    var src = g.getImageData(0, 0, w, h);
+    var d = src.data;
+    var out = cv(w, h);
+    out.g.fillStyle = col;
+    function solid(x, y) {
+      if (x < 0 || y < 0 || x >= w || y >= h) return false;
+      return d[(y * w + x) * 4 + 3] > 8;
+    }
+    for (var y = 0; y < h; y++) {
+      for (var x = 0; x < w; x++) {
+        if (solid(x, y)) continue;
+        if (solid(x - 1, y) || solid(x + 1, y) || solid(x, y - 1) || solid(x, y + 1)) {
+          out.g.fillRect(x, y, 1, 1);
+        }
+      }
+    }
+    g.globalCompositeOperation = 'destination-over';
+    g.drawImage(out.c, 0, 0);
+    g.globalCompositeOperation = 'source-over';
+    return o;
+  }
+
+  /* =====================================================================
+   *  СЕРЁГА
+   * ===================================================================== */
+
+  /* Гитара: висит на бедре, гриф уходит вправо-вверх.
+   * lift = 0 (покой) … 1 (замах на аккорд) */
+  function guitar(g, lift) {
+    var bx = 12, by = 21;                    // центр корпуса
+    var tipX = 27, tipY = 15 - Math.round(lift * 7);
+
+    // гриф
+    line(g, bx + 4, by - 1, tipX, tipY, 3, P.neck);
+    line(g, bx + 4, by - 1, tipX, tipY, 1, P.fret);
+    // голова грифа
+    px(g, tipX - 1, tipY - 1, 5, 5, P.woodD);
+    px(g, tipX, tipY, 3, 2, P.gold);
+
+    // корпус (двойной вырез — грубая «суперстратовская» форма)
+    ellipse(g, bx, by, 7, 6, P.gtr);
+    ellipse(g, bx + 3, by - 2, 5, 4, P.gtr);
+    ellipse(g, bx - 3, by + 1, 5, 5, P.gtrD);
+    ellipse(g, bx - 1, by - 2, 4, 3, P.gtrHi);
+    // струнодержатель + звукосниматели
+    px(g, bx + 1, by - 1, 4, 3, P.greyD);
+    px(g, bx - 2, by + 2, 5, 2, P.grey);
+    // струны
+    line(g, bx + 3, by - 1, tipX, tipY, 1, P.str);
+  }
+
+  /* ноги: pose — 0..3 бег, 4 — в воздухе, 5 — стоит */
+  function legs(g, pose) {
+    var J = P.jean, JD = P.jeanD, B = P.boot;
+    function leg(x, y, h, bx, by) {
+      px(g, x, y, 4, h, J);
+      px(g, x, y, 1, h, JD);
+      px(g, bx, by, 6, 3, B);
+    }
+    if (pose === 0)      { leg(16, 25, 5, 16, 30); leg(10, 25, 4, 8, 29); }
+    else if (pose === 1) { leg(14, 25, 6, 14, 31); leg(11, 25, 5, 10, 30); }
+    else if (pose === 2) { leg(11, 25, 5, 9, 30);  leg(16, 25, 4, 17, 29); }
+    else if (pose === 3) { leg(13, 25, 6, 13, 31); leg(15, 25, 4, 15, 29); }
+    else if (pose === 4) { // прыжок: колени поджаты
+      px(g, 15, 24, 5, 4, J); px(g, 18, 26, 5, 3, J); px(g, 21, 27, 6, 3, B);
+      px(g, 10, 25, 4, 5, J); px(g, 8, 28, 6, 3, B);
+    } else               { leg(15, 25, 6, 15, 31); leg(11, 25, 6, 11, 31); }
+  }
+
+  function hero(pose, opt) {
+    opt = opt || {};
+    var o = cv(32, 34), g = o.g;
+    var lift = opt.lift || 0;
+    var bob = (pose === 1 || pose === 3) ? 1 : 0;   // лёгкая раскачка на бегу
+    var Y = bob;
+
+    // задняя рука
+    px(g, 8, 15 + Y, 3, 7, P.teeL);
+
+    legs(g, pose === 'air' ? 4 : pose);
+
+    // корпус
+    px(g, 10, 13 + Y, 11, 10, P.tee);
+    px(g, 10, 13 + Y, 2, 10, P.teeL);
+    // принт на футболке — молния
+    px(g, 15, 16 + Y, 2, 2, P.gold);
+    px(g, 14, 18 + Y, 2, 2, P.gold);
+    px(g, 16, 18 + Y, 2, 2, P.gold);
+    // ремень
+    px(g, 10, 23 + Y, 11, 2, P.hairD);
+    px(g, 14, 23 + Y, 3, 2, P.gold);
+    // ремень гитары через плечо
+    line(g, 11, 13 + Y, 19, 22 + Y, 2, P.woodD);
+
+    // шея + голова
+    px(g, 14, 11 + Y, 4, 3, P.skinD);
+    px(g, 10, 4 + Y, 10, 9, P.skin);
+    px(g, 10, 4 + Y, 2, 9, P.skinD);
+    // волосы
+    px(g, 9, 2 + Y, 12, 4, P.hair);
+    px(g, 8, 4 + Y, 2, 6, P.hair);
+    px(g, 9, 1 + Y, 5, 2, P.hair);
+    // ухо, глаз, бровь, рот
+    px(g, 11, 8 + Y, 2, 3, P.skinD);
+    px(g, 16, 7 + Y, 2, 2, P.out);
+    px(g, 16, 5 + Y, 3, 1, P.hairD);
+    px(g, 16, 10 + Y, 3, 1, P.skinD);
+    // щетина
+    px(g, 14, 11 + Y, 5, 1, P.hairD);
+
+    guitar(g, lift);
+
+    // передняя рука — на грифе / у корпуса
+    if (lift > 0.5) {
+      px(g, 19, 14 + Y, 4, 4, P.skin);       // рука взлетела после боя по струнам
+      px(g, 20, 12 + Y, 3, 3, P.skin);
+    } else {
+      px(g, 18, 18 + Y, 4, 4, P.skin);
+      px(g, 20, 15 + Y, 3, 4, P.teeL);
+    }
+
+    return outline(o, P.out);
+  }
+
+  function heroHurt() {
+    var o = hero(5, {});
+    var g = o.g;
+    g.globalCompositeOperation = 'source-atop';
+    px(g, 0, 0, o.w, o.h, 'rgba(255,90,90,0.55)');
+    g.globalCompositeOperation = 'source-over';
+    return o;
+  }
+
+  /* =====================================================================
+   *  ЗОМБИ-МЕНЕДЖЕР
+   * ===================================================================== */
+
+  function zombie(frame) {
+    var o = cv(33, 34), g = o.g;
+    var s = frame ? 1 : 0;
+
+    // ноги
+    px(g, 10 + s, 25, 5, 6, P.suitD);
+    px(g, 16 - s, 25, 5, 6, P.suitD);
+    px(g, 9 + s, 31, 7, 3, P.out);
+    px(g, 15 - s, 31, 7, 3, P.out);
+
+    // пиджак
+    px(g, 8, 13, 15, 13, P.suit);
+    px(g, 8, 13, 2, 13, P.suitD);
+    px(g, 13, 13, 5, 12, P.shirtW);        // рубашка
+    px(g, 14, 14, 3, 9, P.tie);            // галстук
+    px(g, 14, 22, 3, 2, P.tie);
+    px(g, 9, 17, 3, 4, P.white);           // бейдж
+    px(g, 9, 17, 3, 1, P.blue);
+
+    // руки вперёд (классическая зомби-поза)
+    px(g, 22, 15 - s, 7, 4, P.suit);
+    px(g, 28, 15 - s, 3, 4, P.zSkin);
+    px(g, 22, 20 + s, 6, 4, P.suit);
+    px(g, 27, 20 + s, 3, 4, P.zSkin);
+
+    // голова
+    px(g, 10, 4, 11, 10, P.zSkin);
+    px(g, 10, 4, 2, 10, P.zSkinD);
+    px(g, 10, 3, 11, 2, P.hairD);          // остатки причёски
+    px(g, 20, 5, 1, 4, P.zSkinD);
+    // пустые глаза
+    px(g, 13, 7, 2, 3, P.white);
+    px(g, 17, 7, 2, 3, P.white);
+    px(g, 13, 8, 1, 1, P.out);
+    px(g, 17, 8, 1, 1, P.out);
+    // рот
+    px(g, 14, 11, 5, 2, P.out);
+    px(g, 15, 11, 1, 1, P.white);
+    px(g, 17, 11, 1, 1, P.white);
+    // гарнитура
+    line(g, 10, 5, 20, 4, 1, P.greyD);
+    px(g, 9, 6, 3, 3, P.greyD);
+    line(g, 11, 9, 14, 11, 1, P.greyD);
+
+    return outline(o, P.out);
+  }
+
+  /* =====================================================================
+   *  БОСС
+   * ===================================================================== */
+
+  function boss(state) {
+    var o = cv(56, 62), g = o.g;
+    var up = (state === 'windup');
+    var sw = (state === 'swing');
+
+    // ноги
+    px(g, 18, 46, 8, 12, P.suitD);
+    px(g, 30, 46, 8, 12, P.suitD);
+    px(g, 16, 57, 11, 5, P.out);
+    px(g, 29, 57, 11, 5, P.out);
+
+    // корпус — широкий пиджак
+    px(g, 12, 22, 32, 26, P.suit);
+    px(g, 12, 22, 4, 26, P.suitD);
+    px(g, 40, 22, 4, 26, P.suitD);
+    px(g, 24, 22, 8, 24, P.shirtW);
+    px(g, 26, 24, 4, 18, P.tie);
+    px(g, 26, 41, 4, 4, P.tie);
+    // бейдж на шнурке
+    line(g, 22, 24, 20, 32, 1, P.greyD);
+    px(g, 17, 32, 7, 6, P.white);
+    px(g, 17, 32, 7, 2, P.red);
+
+    // руки
+    if (up || sw) {
+      var ay = up ? 10 : 26;
+      px(g, 42, ay, 12, 7, P.suit);
+      px(g, 52, ay - 1, 5, 6, P.zSkin);
+      px(g, 6, ay + 4, 10, 7, P.suit);
+      px(g, 2, ay + 3, 6, 6, P.zSkin);
+    } else {
+      px(g, 42, 26, 12, 6, P.suit);
+      px(g, 52, 25, 5, 6, P.zSkin);
+      px(g, 6, 28, 10, 6, P.suit);
+      px(g, 2, 27, 6, 6, P.zSkin);
+      // свиток со спринт-планом
+      px(g, 0, 24, 4, 16, P.paper);
+      px(g, 0, 27, 4, 1, P.inkL);
+      px(g, 0, 31, 4, 1, P.inkL);
+      px(g, 0, 35, 4, 1, P.inkL);
+    }
+
+    // голова
+    px(g, 18, 4, 20, 18, P.zSkin);
+    px(g, 18, 4, 4, 18, P.zSkinD);
+    px(g, 17, 2, 22, 4, P.hairD);
+    px(g, 16, 6, 2, 8, P.hairD);
+    // глаза
+    var eye = (up || sw) ? P.red : P.white;
+    px(g, 23, 10, 4, 5, eye);
+    px(g, 31, 10, 4, 5, eye);
+    px(g, 24, 12, 2, 2, P.out);
+    px(g, 32, 12, 2, 2, P.out);
+    // рот
+    px(g, 24, 18, 10, 3, P.out);
+    for (var t = 0; t < 4; t++) px(g, 25 + t * 2, 18, 1, 2, P.white);
+    // гарнитура
+    line(g, 18, 7, 38, 6, 2, P.greyD);
+    px(g, 15, 9, 5, 6, P.greyD);
+    line(g, 18, 15, 24, 19, 2, P.greyD);
+    px(g, 23, 18, 3, 3, P.red);
+
+    if (state === 'hurt') {
+      g.globalCompositeOperation = 'source-atop';
+      px(g, 0, 0, o.w, o.h, 'rgba(255,255,255,0.7)');
+      g.globalCompositeOperation = 'source-over';
+    }
+    return outline(o, P.out);
+  }
+
+  /* =====================================================================
+   *  ТАСКИ, БОНУСЫ, ЭФФЕКТЫ
+   * ===================================================================== */
+
+  function card(col, flying) {
+    var w = flying ? 42 : 34, h = 26;
+    var o = cv(w, h), g = o.g;
+    var x0 = flying ? 4 : 0;
+
+    if (flying) {   // крылья у «срочной» задачи
+      px(g, 0, 8, 5, 3, P.white);
+      px(g, 1, 11, 4, 2, P.greyL);
+      px(g, 37, 8, 5, 3, P.white);
+      px(g, 37, 11, 4, 2, P.greyL);
+    }
+
+    px(g, x0, 0, 34, 26, P.paper);
+    px(g, x0, 0, 34, 6, col);              // шапка тикета
+    px(g, x0 + 2, 2, 3, 2, P.white);
+    // «текст» тикета
+    px(g, x0 + 3, 10, 22, 2, P.ink);
+    px(g, x0 + 3, 14, 26, 2, P.inkL);
+    px(g, x0 + 3, 18, 16, 2, P.inkL);
+    // аватар исполнителя
+    px(g, x0 + 26, 17, 5, 5, col);
+    px(g, x0 + 27, 18, 3, 1, P.paper);
+    return outline(o, P.out);
+  }
+
+  function pick() {   // медиатор = жизнь
+    var o = cv(18, 18), g = o.g;
+    rows(g, [[3, 5, 8], [4, 4, 10], [5, 3, 12], [6, 3, 12], [7, 3, 12],
+             [8, 4, 10], [9, 4, 10], [10, 5, 8], [11, 6, 6], [12, 7, 4], [13, 8, 2]], P.gold);
+    rows(g, [[4, 5, 4], [5, 4, 4], [6, 4, 3]], P.white);
+    rows(g, [[9, 9, 5], [10, 9, 4], [11, 9, 3]], P.goldD);
+    return outline(o, P.out);
+  }
+
+  function coffee() {  // кофе = режим «шред»
+    var o = cv(18, 20), g = o.g;
+    px(g, 3, 6, 11, 11, P.white);
+    px(g, 3, 6, 11, 3, P.red);
+    px(g, 4, 9, 9, 6, P.choco);
+    px(g, 14, 9, 3, 5, P.white);
+    px(g, 15, 10, 1, 3, P.greyL);
+    px(g, 5, 1, 2, 4, P.greyL);
+    px(g, 9, 0, 2, 5, P.greyL);
+    return outline(o, P.out);
+  }
+
+  function slash() {   // взмах по струнам
+    var o = cv(46, 70), g = o.g;
+    for (var i = 0; i < 3; i++) {
+      var col = i === 0 ? P.white : (i === 1 ? P.cyan : '#3aa6d8');
+      for (var a = -62; a <= 62; a += 2) {
+        var r = 30 - i * 5;
+        var rad = a * Math.PI / 180;
+        px(g, 6 + Math.cos(rad) * r, 35 + Math.sin(rad) * r, 4 - i, 4 - i, col);
+      }
+    }
+    return o;
+  }
+
+  function wave() {    // звуковая волна по боссу
+    var o = cv(28, 40), g = o.g;
+    ring(g, 6, 20, 12, 3, P.cyan);
+    ring(g, 2, 20, 16, 2, P.white);
+    px(g, 10, 18, 8, 4, P.white);
+    return o;
+  }
+
+  function note() {
+    var o = cv(12, 14), g = o.g;
+    ellipse(g, 4, 10, 4, 3, P.white);
+    px(g, 7, 1, 2, 9, P.white);
+    px(g, 9, 1, 3, 3, P.white);
+    return o;
+  }
+
+  function spark(col) {
+    var o = cv(6, 6), g = o.g;
+    px(g, 1, 1, 4, 4, col);
+    px(g, 2, 0, 2, 6, col);
+    px(g, 0, 2, 6, 2, col);
+    return o;
+  }
+
+  /* =====================================================================
+   *  ФИНАЛЬНАЯ СЦЕНА
+   * ===================================================================== */
+
+  function cake() {
+    var o = cv(52, 46), g = o.g;
+    px(g, 2, 40, 48, 4, P.greyL);          // блюдо
+    px(g, 6, 26, 40, 14, P.choco);         // нижний ярус
+    px(g, 6, 26, 40, 4, P.cream);
+    px(g, 12, 14, 28, 12, P.pink);         // верхний ярус
+    px(g, 12, 14, 28, 4, P.cream);
+    for (var i = 0; i < 5; i++) px(g, 9 + i * 8, 30, 4, 3, P.cream);
+    // свечи
+    for (var c = 0; c < 3; c++) {
+      var x = 18 + c * 8;
+      px(g, x, 6, 3, 9, P.white);
+      px(g, x, 6, 1, 9, P.pinkD);
+      px(g, x, 2, 3, 4, P.gold);
+      px(g, x, 0, 3, 3, '#ffd98a');
+    }
+    px(g, 24, 10, 4, 4, P.cherry);
+    return outline(o, P.out);
+  }
+
+  function person(kind) {   // 'wife' | 'daughter'
+    var big = kind === 'wife';
+    var o = cv(big ? 30 : 22, big ? 46 : 34), g = o.g;
+    var hairCol = big ? '#7a4326' : '#a8642f';
+    var dress = big ? '#c2547f' : '#57a8c8';
+
+    if (big) {
+      px(g, 9, 40, 5, 6, P.jeanD); px(g, 16, 40, 5, 6, P.jeanD);
+      px(g, 8, 20, 14, 21, dress);
+      px(g, 6, 22, 4, 12, dress);  px(g, 20, 22, 4, 12, dress);
+      px(g, 5, 32, 4, 5, P.skin);  px(g, 21, 32, 4, 5, P.skin);
+      px(g, 10, 8, 11, 12, P.skin);
+      px(g, 8, 4, 15, 8, hairCol);
+      px(g, 7, 8, 4, 16, hairCol);
+      px(g, 21, 8, 4, 16, hairCol);
+      px(g, 12, 13, 2, 2, P.out); px(g, 17, 13, 2, 2, P.out);
+      px(g, 13, 17, 5, 2, P.pinkD);
+    } else {
+      px(g, 6, 28, 4, 6, P.jeanD); px(g, 12, 28, 4, 6, P.jeanD);
+      px(g, 5, 16, 12, 13, dress);
+      px(g, 2, 10, 4, 9, P.skin);  px(g, 16, 10, 4, 9, P.skin);   // ручки вверх
+      px(g, 6, 6, 10, 10, P.skin);
+      px(g, 4, 2, 14, 6, hairCol);
+      px(g, 3, 6, 3, 10, hairCol);
+      px(g, 16, 6, 3, 10, hairCol);
+      px(g, 2, 1, 4, 3, P.pink);   // бантик
+      px(g, 8, 10, 2, 2, P.out); px(g, 13, 10, 2, 2, P.out);
+      px(g, 9, 13, 4, 2, P.pinkD);
+    }
+    return outline(o, P.out);
+  }
+
+  /* =====================================================================
+   *  ФОНЫ (тайлятся по горизонтали)
+   * ===================================================================== */
+
+  function skyTex(top, bottom) {
+    var o = cv(8, 360), g = o.g;
+    var grad = g.createLinearGradient(0, 0, 0, 360);
+    grad.addColorStop(0, top);
+    grad.addColorStop(1, bottom);
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 8, 360);
+    return o;
+  }
+
+  /* Пол/земля между дальним планом и уровнем, по которому бежит Серёга.
+   * Без неё под фоном зияет дыра до полосы земли. */
+  function floorBand(g, fromY, col, edge) {
+    px(g, 0, fromY, 240, 220 - fromY, col);
+    px(g, 0, fromY, 240, 2, edge);
+    for (var i = 0; i < 240; i += 8) {
+      px(g, i, fromY + 4 + (i % 24) / 8, 4, 1, edge);
+    }
+  }
+
+  function bgOffice(layer) {
+    var o = cv(240, 220), g = o.g;
+    if (layer === 0) {
+      px(g, 0, 0, 240, 220, '#2a2740');
+      for (var i = 0; i < 4; i++) {           // окна с вечерним городом
+        var x = 12 + i * 60;
+        px(g, x, 24, 44, 70, '#4a4670');
+        px(g, x + 2, 26, 40, 66, '#7a6ea8');
+        px(g, x + 2, 70, 40, 22, '#3b3560');
+        for (var w = 0; w < 6; w++) px(g, x + 4 + w * 6, 74 + (w % 3) * 5, 3, 4, P.gold);
+      }
+      px(g, 0, 100, 240, 6, '#3b3760');
+    } else {
+      floorBand(g, 150, '#3f3856', '#4d4568');
+      // рабочие места: стол, монитор, кресло, растение
+      for (var d = 0; d < 2; d++) {
+        var bx = d * 120;
+        px(g, bx + 10, 120, 70, 6, P.wood);        // столешница
+        px(g, bx + 14, 126, 5, 34, P.woodD);
+        px(g, bx + 71, 126, 5, 34, P.woodD);
+        px(g, bx + 28, 92, 34, 24, P.greyD);       // монитор
+        px(g, bx + 31, 95, 28, 18, '#4f9ad8');
+        px(g, bx + 33, 98, 14, 3, P.white);
+        px(g, bx + 33, 103, 20, 2, 'rgba(255,255,255,.5)');
+        px(g, bx + 42, 116, 6, 4, P.greyD);
+        px(g, bx + 86, 128, 6, 32, P.greyD);       // кресло
+        px(g, bx + 78, 104, 22, 26, '#3f5c6d');
+        px(g, bx + 76, 152, 22, 4, P.greyD);
+        px(g, bx + 104, 138, 12, 22, P.brick);     // фикус
+        ellipse(g, bx + 110, 126, 14, 13, P.plantD);
+        ellipse(g, bx + 108, 122, 10, 9, P.plant);
+      }
+    }
+    return o;
+  }
+
+  function bgStreet(layer) {
+    var o = cv(240, 220), g = o.g;
+    if (layer === 0) {
+      for (var i = 0; i < 6; i++) {
+        var w = 30 + (i % 3) * 14, h = 90 + ((i * 37) % 70);
+        var x = i * 40;
+        px(g, x, 220 - h, w, h, i % 2 ? '#3a3358' : '#332e4e');
+        for (var r = 0; r < 8; r++)
+          for (var c = 0; c < 3; c++)
+            if ((i + r + c) % 3) px(g, x + 5 + c * 9, 226 - h + r * 11, 5, 6, (r + c) % 4 ? '#f3c869' : '#5a5480');
+      }
+    } else {
+      floorBand(g, 152, '#332f46', '#43405c');
+      px(g, 0, 150, 240, 8, '#4b4768');           // бордюр
+      for (var l = 0; l < 2; l++) {               // фонари
+        var lx = 30 + l * 130;
+        px(g, lx, 60, 5, 92, P.greyD);
+        px(g, lx - 8, 56, 21, 6, P.greyD);
+        px(g, lx - 6, 62, 17, 5, '#ffe9a8');
+      }
+      // припаркованная машина
+      px(g, 120, 118, 62, 20, '#c4483f');
+      px(g, 132, 104, 38, 16, '#c4483f');
+      px(g, 136, 107, 30, 11, '#8fd0e8');
+      px(g, 118, 132, 66, 8, '#8f382f');
+      ellipse(g, 134, 140, 9, 9, P.out); ellipse(g, 170, 140, 9, 9, P.out);
+      ellipse(g, 134, 140, 4, 4, P.greyL); ellipse(g, 170, 140, 4, 4, P.greyL);
+      px(g, 60, 128, 14, 24, P.plantD);           // куст
+      ellipse(g, 67, 122, 18, 15, P.plant);
+    }
+    return o;
+  }
+
+  function bgYard(layer) {
+    var o = cv(240, 220), g = o.g;
+    if (layer === 0) {
+      for (var i = 0; i < 3; i++) {               // панельки
+        var x = i * 84, h = 130 + (i % 2) * 24;
+        px(g, x, 220 - h, 76, h, i % 2 ? '#4a4468' : '#413b5e');
+        px(g, x, 220 - h, 76, 5, '#5b5480');
+        for (var r = 0; r < 9; r++)
+          for (var c = 0; c < 5; c++)
+            px(g, x + 5 + c * 14, 226 - h + r * 13, 9, 8, ((i + r + c) % 3) ? '#2f2a4a' : '#ffd583');
+      }
+    } else {
+      floorBand(g, 154, '#3a3450', '#474063');
+      // дерево
+      px(g, 26, 110, 10, 46, P.woodD);
+      line(g, 31, 118, 18, 104, 3, P.woodD);
+      line(g, 31, 118, 44, 102, 3, P.woodD);
+      ellipse(g, 30, 96, 30, 22, P.plantD);
+      ellipse(g, 24, 90, 20, 15, P.plant);
+      ellipse(g, 42, 94, 16, 12, P.plant);
+      // лавочка
+      px(g, 110, 132, 52, 6, P.wood);
+      px(g, 110, 116, 52, 5, P.wood);
+      px(g, 112, 138, 5, 18, P.greyD);
+      px(g, 155, 138, 5, 18, P.greyD);
+      // качели
+      px(g, 190, 96, 4, 60, P.greyD);
+      px(g, 226, 96, 4, 60, P.greyD);
+      px(g, 188, 94, 44, 4, P.greyD);
+      px(g, 200, 98, 2, 26, P.greyL);
+      px(g, 216, 98, 2, 26, P.greyL);
+      px(g, 198, 124, 22, 4, P.red);
+    }
+    return o;
+  }
+
+  function bgHome(layer) {
+    var o = cv(240, 220), g = o.g;
+    if (layer === 0) {
+      px(g, 0, 20, 240, 200, '#4a4468');
+      px(g, 0, 20, 240, 6, '#5b5480');
+      for (var r = 0; r < 8; r++)
+        for (var c = 0; c < 8; c++)
+          px(g, 8 + c * 29, 34 + r * 22, 18, 14, ((r + c) % 3) ? '#2f2a4a' : '#ffd583');
+    } else {
+      floorBand(g, 156, '#413a58', '#4e4668');
+      px(g, 90, 96, 62, 60, P.brick);             // подъезд
+      px(g, 96, 104, 50, 52, '#3a2c46');
+      px(g, 100, 108, 20, 46, '#6b4231');
+      px(g, 122, 108, 20, 46, '#6b4231');
+      px(g, 118, 128, 3, 6, P.gold);
+      px(g, 84, 88, 74, 10, P.greyD);
+      px(g, 108, 90, 26, 7, '#ffe9a8');
+    }
+    return o;
+  }
+
+  function groundTex(zone) {
+    var o = cv(96, 64), g = o.g;
+    if (zone === 0) {                              // ковролин
+      px(g, 0, 0, 96, 64, '#4a4260');
+      px(g, 0, 0, 96, 3, '#5d5478');
+      for (var i = 0; i < 96; i += 6) px(g, i, 6 + (i % 12), 3, 2, '#3f3854');
+    } else if (zone === 1) {                       // асфальт
+      px(g, 0, 0, 96, 64, '#39354c');
+      px(g, 0, 0, 96, 3, '#4c4763');
+      px(g, 10, 12, 34, 4, '#c9c3a8');
+      for (var j = 0; j < 20; j++) px(g, (j * 17) % 92, 20 + (j * 13) % 40, 3, 2, '#2e2a40');
+    } else if (zone === 2) {                       // плитка во дворе
+      px(g, 0, 0, 96, 64, '#4d4356');
+      px(g, 0, 0, 96, 3, '#61566d');
+      for (var y = 4; y < 64; y += 14)
+        for (var x = ((y / 14) | 0) % 2 ? 0 : 10; x < 96; x += 22)
+          px(g, x, y, 20, 12, '#443b4e');
+    } else {                                       // дорожка к дому
+      px(g, 0, 0, 96, 64, '#54495c');
+      px(g, 0, 0, 96, 3, '#6a5d73');
+      for (var k = 0; k < 96; k += 16) px(g, k + 2, 8, 12, 46, '#4a4053');
+    }
+    return o;
+  }
+
+  /* =====================================================================
+   *  Регистрация
+   * ===================================================================== */
+
+  var BUILDERS = {
+    hero_run0:   function () { return hero(0); },
+    hero_run1:   function () { return hero(1); },
+    hero_run2:   function () { return hero(2); },
+    hero_run3:   function () { return hero(3); },
+    hero_air:    function () { return hero('air'); },
+    hero_idle:   function () { return hero(5); },
+    hero_atk0:   function () { return hero(5, { lift: 1 }); },
+    hero_atk1:   function () { return hero(4, { lift: 0.4 }); },
+    hero_hurt:   heroHurt,
+
+    zombie0:     function () { return zombie(0); },
+    zombie1:     function () { return zombie(1); },
+
+    boss_idle:   function () { return boss('idle'); },
+    boss_windup: function () { return boss('windup'); },
+    boss_swing:  function () { return boss('swing'); },
+    boss_hurt:   function () { return boss('hurt'); },
+
+    card_blue:   function () { return card(P.blue); },
+    card_red:    function () { return card(P.red); },
+    card_green:  function () { return card(P.green); },
+    card_violet: function () { return card(P.violet); },
+    card_fly:    function () { return card(P.red, true); },
+
+    pick_life:   pick,
+    pick_coffee: coffee,
+    fx_slash:    slash,
+    fx_wave:     wave,
+    fx_note:     note,
+    fx_spark:    function () { return spark(P.gold); },
+    fx_sparkc:   function () { return spark(P.cyan); },
+
+    cake:        cake,
+    wife:        function () { return person('wife'); },
+    daughter:    function () { return person('daughter'); },
+
+    sky0:        function () { return skyTex('#2b2545', '#54406b'); },
+    sky1:        function () { return skyTex('#3d3060', '#e08a5c'); },
+    sky2:        function () { return skyTex('#2f2a55', '#7a5a8c'); },
+    sky3:        function () { return skyTex('#1e1a38', '#463a68'); },
+
+    bg0_far:     function () { return bgOffice(0); },
+    bg0_near:    function () { return bgOffice(1); },
+    bg1_far:     function () { return bgStreet(0); },
+    bg1_near:    function () { return bgStreet(1); },
+    bg2_far:     function () { return bgYard(0); },
+    bg2_near:    function () { return bgYard(1); },
+    bg3_far:     function () { return bgHome(0); },
+    bg3_near:    function () { return bgHome(1); },
+
+    ground0:     function () { return groundTex(0); },
+    ground1:     function () { return groundTex(1); },
+    ground2:     function () { return groundTex(2); },
+    ground3:     function () { return groundTex(3); }
+  };
+
+  return {
+    P: P,
+    KEYS: Object.keys(BUILDERS),
+
+    /* Рисует всё, чего ещё нет в кэше текстур (загруженные PNG не трогает) */
+    build: function (scene) {
+      SG.Art.KEYS.forEach(function (key) {
+        if (scene.textures.exists(key)) return;
+        var o = BUILDERS[key]();
+        scene.textures.addCanvas(key, o.c);
+      });
+    }
+  };
+})();

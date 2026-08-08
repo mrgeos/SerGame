@@ -1,0 +1,12 @@
+{
+  "name": "sergame",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Серёга спешит домой — платформер-раннер для iPhone",
+  "scripts": {
+    "start": "python3 -m http.server 8899"
+  },
+  "devDependencies": {
+    "playwright": "^1.49.0"
+  }
+}

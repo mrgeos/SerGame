@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Серёга">
+<meta name="theme-color" content="#12101c">
+<meta name="description" content="Серёга спешит домой — торт, жена и дочка ждут. Мешают только таски и зомби-менеджеры.">
+<title>Серёга спешит домой</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<style>
+  :root { color-scheme: dark; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 100%; height: 100%;
+    background: #12101c;
+    overflow: hidden;
+    position: fixed;
+    overscroll-behavior: none;
+    touch-action: none;
+    -webkit-user-select: none; user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+    font-family: "Courier New", ui-monospace, monospace;
+  }
+  #game { width: 100%; height: 100%; }
+  #game canvas { display: block; touch-action: none; }
+
+  /* Экран «поверни телефон» — игра горизонтальная */
+  #rotate {
+    position: fixed; inset: 0; z-index: 20;
+    display: none;
+    flex-direction: column; align-items: center; justify-content: center;
+    gap: 18px; padding: 24px;
+    background: #12101c; color: #f2e9d8; text-align: center;
+  }
+  #rotate.on { display: flex; }
+  #rotate .ph {
+    width: 58px; height: 96px; border: 4px solid #f2e9d8; border-radius: 10px;
+    animation: tip 1.6s ease-in-out infinite;
+  }
+  #rotate h1 { font-size: 19px; letter-spacing: .5px; font-weight: 700; }
+  #rotate p { font-size: 14px; opacity: .65; max-width: 22em; line-height: 1.5; }
+  @keyframes tip {
+    0%, 40% { transform: rotate(0deg); }
+    60%, 100% { transform: rotate(-90deg); }
+  }
+
+  /* Заглушка, если что-то не загрузилось */
+  #fatal {
+    position: fixed; inset: 0; z-index: 30; display: none;
+    flex-direction: column; align-items: center; justify-content: center;
+    gap: 14px; padding: 28px; background: #12101c; color: #f2e9d8; text-align: center;
+  }
+  #fatal.on { display: flex; }
+  #fatal code { font-size: 12px; opacity: .6; word-break: break-all; }
+</style>
+</head>
+<body>
+  <div id="game"></div>
+
+  <div id="rotate">
+    <div class="ph"></div>
+    <h1>ПОВЕРНИ ТЕЛЕФОН</h1>
+    <p>Серёга бежит вбок — ему нужен широкий экран.</p>
+  </div>
+
+  <div id="fatal">
+    <h1>Не запустилось :(</h1>
+    <p>Попробуй открыть в Safari или обновить страницу.</p>
+    <code id="fatal-msg"></code>
+  </div>
+
+<script src="vendor/phaser.min.js"></script>
+<script src="src/config.js"></script>
+<script src="src/art.js"></script>
+<script src="src/audio.js"></script>
+<script src="src/scenes/boot.js"></script>
+<script src="src/scenes/menu.js"></script>
+<script src="src/scenes/game.js"></script>
+<script src="src/scenes/gameover.js"></script>
+<script src="src/scenes/victory.js"></script>
+<script src="src/main.js"></script>
+</body>
+</html>

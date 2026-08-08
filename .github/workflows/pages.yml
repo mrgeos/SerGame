@@ -1,11 +1,11 @@
 name: Deploy to GitHub Pages
 
+# Публикуется то, что лежит в main. Ветка stable-v1 — точка отката
+# на версию до переделки уровней, её специально не деплоим.
 on:
   push:
     branches:
       - main
-      - master
-      - claude/serega-platformer-game-db86rd
   workflow_dispatch:
 
 permissions:

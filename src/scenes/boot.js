@@ -10,6 +10,7 @@ SG.BootScene = new Phaser.Class({
   initialize: function BootScene() { Phaser.Scene.call(this, { key: 'Boot' }); },
 
   preload: function () {
+    SG.setupCamera(this);
     // Манифеста может не быть — это нормально, молча идём дальше.
     this.load.on('loaderror', function () {});
     this.load.json('sprite_manifest', 'assets/sprites/manifest.json');

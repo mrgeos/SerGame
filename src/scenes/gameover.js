@@ -6,6 +6,7 @@ SG.GameOverScene = new Phaser.Class({
   initialize: function GameOverScene() { Phaser.Scene.call(this, { key: 'GameOver' }); },
 
   create: function () {
+    SG.setupCamera(this);
     var W = SG.VIEW.W, H = SG.VIEW.H;
     var st = SG.state;
 

@@ -6,6 +6,7 @@ SG.MenuScene = new Phaser.Class({
   initialize: function MenuScene() { Phaser.Scene.call(this, { key: 'Menu' }); },
 
   create: function () {
+    SG.setupCamera(this);
     var W = SG.VIEW.W, H = SG.VIEW.H, G = SG.VIEW.GROUND, S = SG.VIEW.SCALE;
     var C = SG.CFG;
 

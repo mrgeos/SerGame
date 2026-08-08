@@ -135,8 +135,18 @@ SG.VIEW = (function () {
   if (aspect < 1) aspect = 1 / aspect;      // держим телефон вертикально → считаем как ландшафт
   var W = Math.round(H * aspect);
   W = Math.max(560, Math.min(880, W));
-  return { W: W, H: H, GROUND: 300, SCALE: 2 };
+  /* RES — во сколько раз холст плотнее игровых координат. Мир остаётся
+   * W×H, а рисуется всё в W*RES × H*RES: на retina-экране телефона под
+   * это есть запас, и спрайты можно делать вдвое детальнее. */
+  return { W: W, H: H, GROUND: 300, SCALE: 2, RES: 2 };
 })();
+
+/* Камера показывает ровно игровой мир, растянутый на плотный холст */
+SG.setupCamera = function (scene) {
+  var c = scene.cameras.main;
+  c.setZoom(SG.VIEW.RES);
+  c.centerOn(SG.VIEW.W / 2, SG.VIEW.H / 2);
+};
 
 /* Подстановка имён: {wife} → Таня, {WIFE} → ТАНЯ.
  * Применяется ко всему тексту, который выводит SG.txt. */
@@ -157,6 +167,7 @@ SG.txt = function (scene, x, y, text, size, color, opts) {
   var t = scene.add.text(x, y, SG.fmt(text), {
     fontFamily: SG.FONT,
     fontSize: size + 'px',
+    resolution: SG.VIEW.RES,
     color: color || '#f2e9d8',
     fontStyle: opts.light ? 'normal' : 'bold',
     align: opts.align || 'center',

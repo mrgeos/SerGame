@@ -16,6 +16,7 @@ SG.GameScene = new Phaser.Class({
    * ===================================================================== */
 
   create: function () {
+    SG.setupCamera(this);
     var C = SG.CFG, V = SG.VIEW;
     this.W = V.W; this.H = V.H; this.G = V.GROUND; this.S = V.SCALE;
     this.PX_PER_M = 70;

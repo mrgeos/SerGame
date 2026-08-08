@@ -7,8 +7,8 @@
   var game = new Phaser.Game({
     type: Phaser.AUTO,
     parent: 'game',
-    width: V.W,
-    height: V.H,
+    width: V.W * V.RES,
+    height: V.H * V.RES,
     pixelArt: true,
     roundPixels: true,
     backgroundColor: '#12101c',

@@ -469,7 +469,7 @@ SG.Art = (function () {
     R([[22, 29, 8], [23, 28, 10], [24, 28, 10],
        [25, 29, 8], [26, 30, 6], [27, 31, 4]], P.beard);
     R([[22, 29, 8]], P.beardD);
-    for (var bs = 0; bs < 4; bs++) B(29 + bs * 2, 23, 1, 3, '#b0834c');
+    B(30, 23, 3, 3, '#b0834c');                              // блик на бороде
 
     guitar2(g, lift);
 
@@ -484,13 +484,100 @@ SG.Art = (function () {
       B(44, 37, 2, 8, P.skinD);
     }
 
+    if (opt.raw) return o;                       // без пост-обработки — для hero3
     volume(o, { light: 0.26, dark: 0.24 });
     rim(o, '#ffbe7a', 0.4);
     return outline(o, P.out);
   }
 
+  /* =====================================================================
+   *  СЕРЁГА, МЕЛКАЯ ПРОРАБОТКА (128x136)
+   *
+   *  Базовая фигура берётся из hero2 и растягивается вдвое без сглаживания —
+   *  так пропорции и все кадры гарантированно совпадают. Поверх дорисованы
+   *  детали, которые в сетке 64 просто не помещались: зрачки за линзами,
+   *  брови, ноздря, отдельные пряди и волоски бороды, шесть струн, лады,
+   *  пальцы, шнуровка на ботинках, швы на джинсах.
+   * ===================================================================== */
+
+  function hero3(pose, opt) {
+    opt = opt || {};
+    var lift = opt.lift || 0;
+    var base = hero2(pose, opt.raw === undefined ? { lift: lift, raw: true } : opt);
+
+    var o = cv(128, 136), g = o.g;
+    g.imageSmoothingEnabled = false;
+    g.drawImage(base.c, 0, 0, 128, 136);
+
+    var Y = ((pose === 1 || pose === 3) ? 2 : 0) * 2;
+    function d(x, y, w, h, col) { px(g, x, y + Y, w, h, col); }
+
+    // --- лицо -----------------------------------------------------------
+    d(52, 19, 11, 2, P.hairSD);                    // брови над оправой
+    d(73, 19, 11, 2, P.hairSD);
+    d(55, 29, 4, 5, '#22304a');                    // зрачки за линзами
+    d(76, 29, 4, 5, '#22304a');
+    d(56, 30, 1, 1, P.white);                      // блики в глазах
+    d(77, 30, 1, 1, P.white);
+    line(g, 74, 34 + Y, 82, 26 + Y, 1, '#dbeeff');  // блик на стекле
+    line(g, 54, 34 + Y, 60, 28 + Y, 1, '#9dbde0');
+    d(52, 24, 16, 1, '#3a3550');                   // верхняя грань оправы
+    d(72, 24, 16, 1, '#3a3550');
+    d(65, 37, 2, 1, '#a8724f');                    // ноздря
+    d(68, 34, 2, 3, '#ffd2a8');                    // блик на носу
+    d(78, 33, 4, 7, '#ffd2a8');                    // скула
+    d(63, 42, 8, 1, '#8a4a4a');                    // верхняя губа
+
+    // борода: несколько неровных пятен вместо равномерной гребёнки —
+    // регулярный частокол на удвоенной основе читается как рябь
+    d(58, 45, 3, 5, '#b0834c');
+    d(64, 47, 2, 4, '#a87a44');
+    d(69, 44, 3, 6, '#b0834c');
+    d(62, 39, 4, 2, '#a87a44');                    // блик на усах
+    d(60, 52, 8, 1, P.beardD);                     // кончик клина
+
+    // волосы: широкая полоса засвета по зачёсу и пара неровных прядей
+    line(g, 56, 12 + Y, 74, 2 + Y, 3, P.hairSL);
+    line(g, 50, 17 + Y, 64, 7 + Y, 2, P.hairSL);
+    line(g, 47, 20 + Y, 53, 13 + Y, 2, P.hairSD);
+    line(g, 76, 10 + Y, 82, 16 + Y, 2, P.hairSD);
+
+    // --- футболка -------------------------------------------------------
+    d(56, 52, 16, 3, P.teeL);                      // ворот
+    d(58, 53, 12, 1, '#1b1926');
+    d(44, 62, 16, 1, '#1b1926');                   // складки
+    d(48, 70, 20, 1, '#1b1926');
+    d(46, 84, 14, 1, '#1b1926');
+    d(43, 58, 2, 22, P.teeL);                      // засвет по краю
+
+    // --- гитара ---------------------------------------------------------
+    // Гриф со струнами и ладами уже нарисован в базе — здесь только то,
+    // что в сетке 64 не помещалось: точки-ориентиры и мелкая фурнитура.
+    d(88, 74, 2, 2, P.str);
+    d(98, 68, 2, 2, P.str);
+    d(38, 108, 3, 3, P.greyL);                     // ручки громкости
+    d(39, 108, 1, 1, P.white);
+    d(46, 110, 3, 3, P.greyL);
+    d(47, 110, 1, 1, P.white);
+    d(30, 100, 3, 3, P.greyD);                     // джек
+    d(56, 88, 3, 2, P.gold);                       // штифт ремня
+
+    // --- руки, ноги -----------------------------------------------------
+    if (lift > 0.5) {
+      d(95, 43, 1, 11, '#c98f60');                 // разделение пальцев
+      d(100, 42, 1, 11, '#c98f60');
+    } else {
+      d(91, 79, 1, 11, '#c98f60');
+      d(96, 78, 1, 12, '#c98f60');
+    }
+
+    volume(o, { light: 0.22, dark: 0.2 });
+    rim(o, '#ffbe7a', 0.38);
+    return outline(o, P.out);
+  }
+
   function heroHurt() {
-    var o = hero2(5, {});
+    var o = hero3(5, {});
     var g = o.g;
     g.globalCompositeOperation = 'source-atop';
     px(g, 0, 0, o.w, o.h, 'rgba(255,90,90,0.55)');
@@ -1153,14 +1240,14 @@ SG.Art = (function () {
    * ===================================================================== */
 
   var BUILDERS = {
-    hero_run0:   function () { return hero2(0); },
-    hero_run1:   function () { return hero2(1); },
-    hero_run2:   function () { return hero2(2); },
-    hero_run3:   function () { return hero2(3); },
-    hero_air:    function () { return hero2('air'); },
-    hero_idle:   function () { return hero2(5); },
-    hero_atk0:   function () { return hero2(5, { lift: 1 }); },
-    hero_atk1:   function () { return hero2(4, { lift: 0.4 }); },
+    hero_run0:   function () { return hero3(0); },
+    hero_run1:   function () { return hero3(1); },
+    hero_run2:   function () { return hero3(2); },
+    hero_run3:   function () { return hero3(3); },
+    hero_air:    function () { return hero3('air'); },
+    hero_idle:   function () { return hero3(5); },
+    hero_atk0:   function () { return hero3(5, { lift: 1 }); },
+    hero_atk1:   function () { return hero3(4, { lift: 0.4 }); },
     hero_hurt:   heroHurt,
 
     zombie0:     function () { return zombie(0); },
@@ -1221,8 +1308,8 @@ SG.Art = (function () {
   /* Спрайты, нарисованные в новом разрешении: их выводим 1:1,
    * остальные пока растягиваем вдвое. Так можно мигрировать по одному. */
   var HI = {
-    hero_run0: 1, hero_run1: 1, hero_run2: 1, hero_run3: 1,
-    hero_air: 1, hero_idle: 1, hero_atk0: 1, hero_atk1: 1, hero_hurt: 1
+    hero_run0: 0.5, hero_run1: 0.5, hero_run2: 0.5, hero_run3: 0.5,
+    hero_air: 0.5, hero_idle: 0.5, hero_atk0: 0.5, hero_atk1: 0.5, hero_hurt: 0.5
   };
 
   /* Эталонные размеры: сколько спрайт занимает на экране в игровых точках.
@@ -1237,7 +1324,9 @@ SG.Art = (function () {
     KEYS: Object.keys(BUILDERS),
 
     /* Во сколько раз растягивать нарисованный кодом спрайт */
-    scaleFor: function (key) { return HI[key] ? 1 : SG.VIEW.SCALE; },
+    scaleFor: function (key) {
+      return HI[key] !== undefined ? HI[key] : SG.VIEW.SCALE;
+    },
 
     /* Рисует всё, чего ещё нет в кэше текстур, и запоминает эталонные размеры */
     build: function (scene) {
@@ -1245,7 +1334,7 @@ SG.Art = (function () {
         if (scene.textures.exists(key)) return;
         var o = BUILDERS[key]();
         scene.textures.addCanvas(key, o.c);
-        var s = HI[key] ? 1 : SG.VIEW.SCALE;
+        var s = HI[key] !== undefined ? HI[key] : SG.VIEW.SCALE;
         DESIGN[key] = { w: o.w, h: o.h, dw: o.w * s, dh: o.h * s };
       });
     },

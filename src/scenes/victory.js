@@ -6,6 +6,7 @@ SG.VictoryScene = new Phaser.Class({
   initialize: function VictoryScene() { Phaser.Scene.call(this, { key: 'Victory' }); },
 
   create: function () {
+    SG.setupCamera(this);
     var W = SG.VIEW.W, H = SG.VIEW.H, S = SG.VIEW.SCALE;
     var FLOOR = 300;
     var C = SG.CFG, st = SG.state;

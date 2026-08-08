@@ -136,6 +136,14 @@ SG.Audio = (function () {
                              tone({ freq: hz(n - 12), type: 'triangle', dur: 0.3, vol: 0.14, at: i * 0.13 }); }); },
     select:  function () { tone({ freq: hz(72), type: 'square', dur: 0.07, vol: 0.18 }); },
 
+    /* выходы с уровней */
+    doors:   function () { noise({ dur: 0.5, freq: 700, vol: 0.16, filter: 'bandpass' });
+                           tone({ freq: 80, type: 'square', dur: 0.14, vol: 0.13, at: 0.42 }); },
+    ding:    function () { tone({ freq: hz(88), type: 'sine', dur: 0.5, vol: 0.24 });
+                           tone({ freq: hz(83), type: 'sine', dur: 0.7, vol: 0.2, at: 0.22 }); },
+    stage:   function () { [67, 72, 76, 79].forEach(function (n, i) {
+                             tone({ freq: hz(n), type: 'square', dur: 0.22, vol: 0.2, at: i * 0.09 }); }); },
+
     /* подгоны от Геоса */
     msg:     function () { tone({ freq: hz(84), type: 'sine', dur: 0.1, vol: 0.22 });
                            tone({ freq: hz(91), type: 'sine', dur: 0.16, vol: 0.2, at: 0.1 }); },

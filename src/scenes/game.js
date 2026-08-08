@@ -38,6 +38,17 @@ SG.GameScene = new Phaser.Class({
     this.ents = [];
     this.paused = false;
 
+    /* Дом — там, где кончается последняя зона. Оттуда же считается
+     * разгон спавнера и полоса прогресса. */
+    this.goalMeters = C.zones[C.zones.length - 1].until;
+
+    // выход с уровня: выезжает навстречу в конце зоны
+    this.gate = null;
+    this.gateStep = '';
+    this.gateStarted = false;
+    this.heroFrozen = false;          // true — спрайтом героя двигает кат-сцена
+    this.lap = { score: 0, kills: 0, meters: 0 };   // с чего начался текущий этап
+
     // подгоны от Геоса: выдаются один раз за забег
     this.gift = { hatOffered: false, hatOn: false, dragonOffered: false, dragonUsed: false };
     this.cinematic = false;
@@ -60,7 +71,7 @@ SG.GameScene = new Phaser.Class({
   buildWorld: function () {
     var W = this.W, H = this.H, G = this.G;
     this.zones = [];
-    for (var i = 0; i < 4; i++) {
+    for (var i = 0; i < SG.CFG.zones.length; i++) {
       var z = {
         sky:  this.add.image(0, 0, 'sky' + i).setOrigin(0).setDisplaySize(W, H).setDepth(0),
         far:  this.add.tileSprite(0, G - 220, W, 220, 'bg' + i + '_far').setOrigin(0).setDepth(1),
@@ -86,6 +97,9 @@ SG.GameScene = new Phaser.Class({
     this.heroSpr = this.add.sprite(this.heroX, G, 'hero_run0')
       .setOrigin(0.5, 1).setDepth(12);
     SG.Art.fit(this.heroSpr, 'hero_run0');
+    // куда возвращать героя после кат-сцены и каким его масштаб был до неё
+    this.heroHomeX = this.heroX;
+    this.heroBaseScale = this.heroSpr.scale;
     this.heroShadow = this.add.ellipse(this.heroX, G + 2, 44, 10, 0x171223, 0.35).setDepth(11);
   },
 
@@ -131,8 +145,16 @@ SG.GameScene = new Phaser.Class({
    *  ДЕЙСТВИЯ ГЕРОЯ
    * ===================================================================== */
 
+  /* Во время кат-сцен управление глухое: и у подгонов Геоса,
+   * и на выходе с уровня спрайтом героя двигает сцена. */
+  locked: function () {
+    return this.phase === 'dead' || this.phase === 'outro' ||
+           this.cinematic || this.heroFrozen ||
+           (this.phase === 'gate' && this.gateStep !== 'approach');
+  },
+
   doJump: function () {
-    if (this.phase === 'dead' || this.phase === 'outro' || this.cinematic) return;
+    if (this.locked()) return;
     var h = this.hero, C = SG.CFG.run;
     if (h.onGround) {
       h.vy = C.jumpVel; h.onGround = false; h.jumps = 1;
@@ -146,7 +168,7 @@ SG.GameScene = new Phaser.Class({
   },
 
   doAttack: function () {
-    if (this.phase === 'dead' || this.phase === 'outro' || this.cinematic) return;
+    if (this.locked()) return;
     var now = this.time.now, C = SG.CFG.run;
     if (now < this.hero.cdUntil) return;
     this.hero.attackUntil = now + C.attackActiveMs;
@@ -181,9 +203,16 @@ SG.GameScene = new Phaser.Class({
     var dt = Math.min(delta, 48) / 1000;
 
     if (this.phase === 'run') this.updateRun(dt);
+    else if (this.phase === 'gate') this.updateGate(dt);
     else if (this.phase === 'bossIntro') this.updateBossIntro(dt);
     else if (this.phase === 'boss' && !this.cinematic) this.updateBoss(dt);
-    else if (this.phase === 'outro') this.updateOutro(dt);
+
+    // страховка по шапке живёт вне updateRun: подгон могли выдать
+    // прямо перед выходом с уровня, и добежать до босса надо в любом случае
+    if (this.gift.hatOffered && !this.gift.hatWorn && this.phase !== 'dead' &&
+        this.hatDeadline && this.time.now > this.hatDeadline) {
+      this.wearHat();
+    }
 
     this.updateHero(dt);
     this.updateHat(dt);
@@ -208,12 +237,10 @@ SG.GameScene = new Phaser.Class({
     this.speed = Math.min(C.run.maxSpeed, C.run.startSpeed + this.meters * C.run.accelPerMeter);
     this.scroll = this.speed * (this.gift.hatOn ? C.hat.speedMul : 1);
 
-    this.checkZone();
-
     this.spawnTimer -= dt;
     if (this.spawnTimer <= 0) {
       this.spawnPattern();
-      var prog = Math.min(1, this.meters / C.run.bossAtMeters);
+      var prog = Math.min(1, this.meters / this.goalMeters);
       this.spawnTimer = (0.95 - 0.32 * prog) + Math.random() * 0.55;
     }
 
@@ -223,16 +250,17 @@ SG.GameScene = new Phaser.Class({
       this.pickupTimer = 15 + Math.random() * 9;
     }
 
-    if (this.gift.hatOffered && !this.gift.hatWorn && this.hatDeadline &&
-        this.time.now > this.hatDeadline) {
-      this.wearHat();
+    // конец зоны: навстречу выезжает выход
+    var zone = C.zones[this.zoneIdx];
+    if (!this.gateStarted && this.meters >= zone.until - C.level.approachMeters) {
+      // подгон уже в пути — сперва дадим забрать шапку, выход подождёт
+      if (!(this.gift.hatOffered && !this.gift.hatWorn)) this.startGate();
     }
-
-    if (this.meters >= C.run.bossAtMeters) this.startBoss();
   },
 
   updateHero: function (dt) {
     var h = this.hero, C = SG.CFG.run, now = this.time.now;
+    if (this.heroFrozen) return;         // спрайтом сейчас управляет кат-сцена
 
     h.vy += C.gravity * dt;
     h.y += h.vy * dt;
@@ -249,6 +277,8 @@ SG.GameScene = new Phaser.Class({
     if (now < h.hurtUntil) tex = 'hero_hurt';
     this.heroSpr.setTexture(tex);
     this.heroSpr.y = h.y;
+    this.heroSpr.x = this.heroX;         // на выходе с уровня Серёга идёт к двери
+    this.heroShadow.x = this.heroX;
 
     // мигание в неуязвимости
     this.heroSpr.setAlpha(now < h.invulnUntil ? (Math.floor(now / 70) % 2 ? 0.35 : 1) : 1);
@@ -320,7 +350,7 @@ SG.GameScene = new Phaser.Class({
   spawnPattern: function () {
     var W = this.W, x0 = W + 60;
     var C = SG.CFG;
-    var prog = Math.min(1, this.meters / C.run.bossAtMeters);
+    var prog = Math.min(1, this.meters / this.goalMeters);
     var ti = Math.floor(Math.random() * C.tasks.length);
 
     var pool = ['card', 'card', 'card'];
@@ -363,6 +393,9 @@ SG.GameScene = new Phaser.Class({
 
     for (var i = this.ents.length - 1; i >= 0; i--) {
       var e = this.ents[i];
+      // Список могли вычистить прямо посреди цикла: hurt() умеет позвать
+      // подгон Геоса, а тот сносит всё, что летит навстречу.
+      if (!e || e.dead) continue;
       e.t = (e.t || 0) + dt;
       e.x += (e.vx - this.scroll) * dt;
       e.obj.x = e.x;
@@ -416,11 +449,37 @@ SG.GameScene = new Phaser.Class({
   },
 
   killEnt: function (e, idx, fx) {
+    if (!e || e.dead) return;
+    e.dead = true;
     if (fx) this.puff(e.x, e.cy, 5);
     if (e.say) e.say.destroy();
     e.obj.destroy();
-    if (idx === undefined) idx = this.ents.indexOf(e);
+    // индекс мог протухнуть, если список тронули по дороге
+    if (idx === undefined || this.ents[idx] !== e) idx = this.ents.indexOf(e);
     if (idx >= 0) this.ents.splice(idx, 1);
+  },
+
+  /* Снести всё, что летит навстречу.
+   *
+   * Зовётся в том числе из середины updateEnts — через hurt(), который умеет
+   * вызвать подгон Геоса. Поэтому список пересобирается целиком, а не
+   * выщипывается по индексам: иначе итератор наверху остаётся с чужими
+   * номерами и уходит за границу массива.
+   *
+   * keep — необязательный фильтр: что вернёт true, то остаётся жить. */
+  clearEnts: function (fx, keep) {
+    var list = this.ents, kept = [];
+    this.ents = [];
+    for (var i = 0; i < list.length; i++) {
+      var e = list[i];
+      if (e.dead) continue;
+      if (keep && keep(e)) { kept.push(e); continue; }
+      e.dead = true;
+      if (fx) this.puff(e.x, e.cy, 5);
+      if (e.say) e.say.destroy();
+      e.obj.destroy();
+    }
+    this.ents = kept;
   },
 
   smash: function (e, idx) {
@@ -544,24 +603,21 @@ SG.GameScene = new Phaser.Class({
    *  ЗОНЫ И HUD
    * ===================================================================== */
 
-  checkZone: function () {
-    var zs = SG.CFG.zones;
-    var idx = 0;
-    for (var i = 0; i < zs.length; i++) { if (this.meters >= zs[i].until) idx = i + 1; }
+  /* Декорации меняются мгновенно — под плашкой итога этапа экран чёрный,
+   * так что кроссфейд тут не нужен и только смазал бы смену места. */
+  setZone: function (idx) {
     idx = Math.min(idx, this.zones.length - 1);
     if (idx === this.zoneIdx) return;
-
     var from = this.zones[this.zoneIdx], to = this.zones[idx];
+    [from.sky, from.far, from.near, from.gnd].forEach(function (o) { o.setAlpha(0); });
+    [to.sky, to.far, to.near, to.gnd].forEach(function (o) { o.setAlpha(1); });
     this.zoneIdx = idx;
-    this.tweens.add({ targets: [from.sky, from.far, from.near, from.gnd], alpha: 0, duration: 900 });
-    this.tweens.add({ targets: [to.sky, to.far, to.near, to.gnd], alpha: 1, duration: 900 });
-    this.banner(zs[idx].name, '');
   },
 
   updateHud: function () {
     this.scoreTxt.setText(String(Math.round(this.score)));
     this.metersTxt.setText(Math.round(this.meters) + ' м');
-    var prog = Phaser.Math.Clamp(this.meters / SG.CFG.run.bossAtMeters, 0, 1);
+    var prog = Phaser.Math.Clamp(this.meters / this.goalMeters, 0, 1);
     this.progBar.width = (this.W - 120) * prog;
   },
 
@@ -676,9 +732,7 @@ SG.GameScene = new Phaser.Class({
     this.geosMessage(C.geos.hatMsg, 2600);
 
     // расчищаем полосу: и то, что уже летит, и ближайшие спавны
-    for (var i = this.ents.length - 1; i >= 0; i--) {
-      if (this.ents[i].kind !== 'pickup') this.killEnt(this.ents[i], i, true);
-    }
+    this.clearEnts(true, function (e) { return e.kind === 'pickup'; });
     this.spawnTimer = Math.max(this.spawnTimer, C.hat.clearLaneSec);
     // страховка: если шапку каким-то чудом не подобрали — надеваем сами
     this.hatDeadline = this.time.now + C.hat.spawnDelayMs + 9000;
@@ -744,12 +798,14 @@ SG.GameScene = new Phaser.Class({
 
   updateHat: function (dt) {
     if (!this.gift.hatOn || !this.hatSpr) return;
+    this.hatSpr.x = this.heroX - 1;
+    this.hatProp.x = this.heroX - 1;
     this.hatSpr.y = this.hero.y - this.heroHatOffset();
     this.hatProp.y = this.hatSpr.y - this.hatSpr.displayHeight + 8;
     this.hatProp.rotation += dt * 26;
 
-    // полосы скорости
-    if (Math.random() < 0.6) {
+    // полосы скорости — только на бегу, у двери они ни к чему
+    if (this.phase === 'run' && Math.random() < 0.6) {
       var y = this.G - 20 - Math.random() * 130;
       var ln = this.add.rectangle(this.W + 20, y, 30 + Math.random() * 40, 2,
         0xf5c542, 0.5).setDepth(9);
@@ -768,9 +824,7 @@ SG.GameScene = new Phaser.Class({
     this.geosMessage(C.geos.dragonMsg, 2600);
 
     // сносим летящие таски, чтобы подгон было видно
-    for (var i = this.ents.length - 1; i >= 0; i--) {
-      if (this.ents[i].kind === 'shot') this.killEnt(this.ents[i], i, true);
-    }
+    this.clearEnts(true, function (e) { return e.kind !== 'shot'; });
     // страховка: если дракона почему-то не подобрали — зовём сами
     this.dragonDeadline = this.time.now + 11000;
 
@@ -796,7 +850,7 @@ SG.GameScene = new Phaser.Class({
     this.cinematic = true;
 
     // сносим летящие таски, чтобы не мешали смотреть
-    for (var i = this.ents.length - 1; i >= 0; i--) this.killEnt(this.ents[i], i, false);
+    this.clearEnts(false);
 
     this.heroSpr.setTexture('hero_atk0');
     this.say(C.geos.dragonLine, 2000);
@@ -839,6 +893,239 @@ SG.GameScene = new Phaser.Class({
   },
 
   /* =====================================================================
+   *  ВЫХОД С УРОВНЯ
+   *
+   *  Зоны больше не перетекают одна в другую на ходу: у каждой свой конец.
+   *  Офис кончается лифтом, улица — входом в метро, двор — подъездом,
+   *  у которого ждёт босс. Схема одна и та же: выход выезжает навстречу,
+   *  мир тормозит, Серёга доходит до двери — дальше по обстоятельствам.
+   * ===================================================================== */
+
+  /* У каких выходов есть створки. Ширина створки на экране равна половине
+   * проёма — она и задаёт, где стоят косяки, так что подгонять руками
+   * ничего не надо: поменялся масштаб спрайта — поехало и всё остальное. */
+  GATE_LEAF: { elevator: 'gate_elev_leaf', porch: 'gate_porch_leaf' },
+
+  startGate: function () {
+    var C = SG.CFG, zone = C.zones[this.zoneIdx];
+    this.gateStarted = true;
+    this.phase = 'gate';
+    this.gateStep = 'approach';
+
+    // расчищаем полосу: у двери урона быть не должно
+    this.clearEnts(true);
+
+    this.buildGate(zone.gate);
+    this.floatText(this.W - 70, this.G - 170, zone.hint, '#f5c542');
+  },
+
+  buildGate: function (kind) {
+    var key = 'gate_' + kind;
+    var x = this.W + 150;
+    var restX = Math.round(this.W * (kind === 'porch' ? 0.86 : 0.72));
+
+    var spr = SG.Art.fit(this.add.sprite(x, this.G, key).setOrigin(0.5, 1).setDepth(8), key);
+    var g = { kind: kind, spr: spr, x: x, restX: restX, leaves: [], dx: [] };
+
+    // Створки прижимаются к косякам: левая растёт вправо от левого косяка,
+    // правая — влево от правого. Открываются сжатием по X, то есть уезжают
+    // каждая в свою стену, как настоящие.
+    var lk = this.GATE_LEAF[kind];
+    if (lk && SG.Art.DESIGN[lk]) {
+      var half = SG.Art.DESIGN[lk].dw;
+      var l = SG.Art.fit(this.add.sprite(x - half, this.G, lk).setOrigin(0, 1).setDepth(9), lk);
+      var r = SG.Art.fit(this.add.sprite(x + half, this.G, lk).setOrigin(1, 1).setDepth(9), lk);
+      l.baseSX = l.scaleX; r.baseSX = r.scaleX;
+      g.leaves = [l, r];
+      g.dx = [-half, half];
+    }
+    this.gate = g;
+  },
+
+  openGateDoors: function () {
+    var g = this.gate;
+    if (!g || !g.leaves.length || g.open) return;
+    g.open = true;
+    SG.Audio.sfx('doors');
+    for (var i = 0; i < g.leaves.length; i++) {
+      this.tweens.add({
+        targets: g.leaves[i], scaleX: g.leaves[i].baseSX * 0.07,
+        duration: 620, ease: 'Sine.easeInOut'
+      });
+    }
+  },
+
+  closeGateDoors: function () {
+    var g = this.gate;
+    if (!g || !g.leaves.length || !g.open) return;
+    g.open = false;
+    SG.Audio.sfx('doors');
+    for (var i = 0; i < g.leaves.length; i++) {
+      this.tweens.add({
+        targets: g.leaves[i], scaleX: g.leaves[i].baseSX,
+        duration: 620, ease: 'Sine.easeInOut'
+      });
+    }
+  },
+
+  destroyGate: function () {
+    var g = this.gate;
+    if (!g) return;
+    g.spr.destroy();
+    g.leaves.forEach(function (o) { o.destroy(); });
+    this.gate = null;
+  },
+
+  updateGate: function (dt) {
+    var g = this.gate;
+    if (!g) return;
+
+    if (this.gateStep === 'approach') {
+      this.scroll = Math.max(0, this.scroll - 620 * dt);
+      this.distPx += this.scroll * dt;
+      this.meters = this.distPx / this.PX_PER_M;
+      g.x += (g.restX - g.x) * Math.min(1, dt * 2.4);
+      if (this.scroll <= 1 && Math.abs(g.x - g.restX) < 3) {
+        this.scroll = 0;
+        g.x = g.restX;
+        // приземляем, если подъехали в прыжке — дальше идёт кат-сцена
+        this.hero.vy = 0; this.hero.y = this.G;
+        this.hero.onGround = true; this.hero.jumps = 0;
+        this.arriveAtGate();
+      }
+    }
+
+    g.spr.x = g.x;
+    for (var i = 0; i < g.leaves.length; i++) g.leaves[i].x = g.x + g.dx[i];
+  },
+
+  arriveAtGate: function () {
+    var self = this, g = this.gate;
+
+    // у подъезда никто не заходит: оттуда выходит босс
+    if (g.kind === 'porch') {
+      this.gateStep = 'boss';
+      this.banner('ДОМ', 'осталось зайти');
+      // дверь открывается под конец плашки, босс выходит уже после неё
+      this.time.delayedCall(900, function () { self.openGateDoors(); });
+      this.time.delayedCall(1900, function () { self.startBoss(); });
+      return;
+    }
+
+    this.gateStep = 'walk';
+    this.openGateDoors();
+    var dist = Math.abs(g.restX - this.heroX);
+    this.tweens.add({
+      targets: this, heroX: g.restX, duration: Math.max(500, dist * 2.1),
+      ease: 'Sine.easeInOut', delay: 260,
+      onComplete: function () { self.enterGate(); }
+    });
+  },
+
+  /* Серёга скрывается в проёме: в лифте створки закрываются за ним,
+   * в метро он сбегает по лестнице вниз. */
+  enterGate: function () {
+    var self = this, g = this.gate;
+    this.gateStep = 'in';
+    this.heroFrozen = true;
+    this.heroSpr.setTexture('hero_idle');
+
+    if (g.kind === 'metro') {
+      this.tweens.add({ targets: this.heroSpr, y: this.G + 26, alpha: 0,
+        scale: this.heroSpr.scale * 0.78, duration: 760, ease: 'Sine.easeIn' });
+      this.tweens.add({ targets: this.heroShadow, alpha: 0, duration: 500 });
+      this.time.delayedCall(900, function () { self.stageCleared(); });
+    } else {
+      this.tweens.add({ targets: [this.heroSpr, this.heroShadow], alpha: 0, duration: 380 });
+      this.time.delayedCall(420, function () {
+        self.closeGateDoors();
+        SG.Audio.sfx('ding');
+      });
+      this.time.delayedCall(1150, function () { self.stageCleared(); });
+    }
+    if (this.hatSpr) this.tweens.add({ targets: [this.hatSpr, this.hatProp], alpha: 0, duration: 380 });
+  },
+
+  /* Плашка с итогом этапа. Экран гаснет, под ним меняются декорации,
+   * потом Серёга вбегает в новую зону слева. Тапа не ждём. */
+  stageCleared: function () {
+    var self = this, C = SG.CFG, W = this.W, H = this.H;
+    var zone = C.zones[this.zoneIdx];
+    this.gateStep = 'panel';
+
+    var veil = this.add.rectangle(0, 0, W, H, 0x0d0a16, 1).setOrigin(0).setDepth(40).setAlpha(0);
+    this.tweens.add({
+      targets: veil, alpha: 1, duration: 400,
+      onComplete: function () { self.showStagePanel(veil, zone); }
+    });
+  },
+
+  showStagePanel: function (veil, zone) {
+    var self = this, C = SG.CFG, W = this.W, H = this.H;
+    var gained = Math.round(this.score) - this.lap.score;
+    var killed = this.kills - this.lap.kills;
+    var walked = Math.round(this.meters - this.lap.meters);
+    var next = C.zones[Math.min(this.zoneIdx + 1, C.zones.length - 1)];
+
+    SG.Audio.sfx('stage');
+
+    var stats = '+' + gained + ' ' + SG.plural(gained, ['очко', 'очка', 'очков']) +
+                '   ·   ' + killed + ' ' + SG.plural(killed, ['менеджер', 'менеджера', 'менеджеров']) +
+                '   ·   ' + walked + ' м';
+    var rule = Math.min(W - 80, 340);
+
+    var items = [
+      SG.txt(this, W / 2, H / 2 - 46, zone.cleared, 28, '#f5c542'),
+      SG.txt(this, W / 2, H / 2 - 16, zone.sub, 14, '#c9c3dd', { light: true, strokeThickness: 3 }),
+      this.add.rectangle(W / 2, H / 2 + 2, rule, 1, 0xf5c542, 0.45),
+      SG.txt(this, W / 2, H / 2 + 20, stats, 14, '#7de8ff', { strokeThickness: 3 }),
+      SG.txt(this, W / 2, H / 2 + 50, 'ДАЛЬШЕ: ' + next.name, 15, '#f2e9d8')
+    ];
+    items.forEach(function (t, i) {
+      t.setDepth(41).setAlpha(0);
+      self.tweens.add({ targets: t, alpha: 1, duration: 240, delay: i * 100 });
+    });
+
+    // пока темно — переставляем декорации и уводим Серёгу за левый край
+    this.destroyGate();
+    this.setZone(this.zoneIdx + 1);
+    this.lap = { score: Math.round(this.score), kills: this.kills, meters: this.meters };
+
+    this.time.delayedCall(C.level.panelMs, function () {
+      items.forEach(function (t) { t.destroy(); });
+      self.resumeRun();
+      self.tweens.add({
+        targets: veil, alpha: 0, duration: 500,
+        onComplete: function () { veil.destroy(); }
+      });
+    });
+  },
+
+  resumeRun: function () {
+    var self = this;
+    this.gateStep = '';
+    this.gateStarted = false;
+    this.phase = 'run';
+
+    // Серёга вбегает слева
+    this.heroFrozen = false;
+    this.hero.y = this.G; this.hero.vy = 0; this.hero.onGround = true; this.hero.jumps = 0;
+    this.hero.invulnUntil = 0; this.hero.hurtUntil = 0;
+    this.heroSpr.setAlpha(1).setScale(this.heroBaseScale);
+    this.heroShadow.setAlpha(0.35);
+    if (this.hatSpr) { this.hatSpr.setAlpha(1); this.hatProp.setAlpha(1); }
+
+    this.heroX = -70;
+    this.tweens.add({
+      targets: this, heroX: this.heroHomeX, duration: 900, ease: 'Sine.easeOut'
+    });
+
+    this.scroll = this.speed * (this.gift.hatOn ? SG.CFG.hat.speedMul : 1);
+    this.spawnTimer = 1.6;
+    this.banner(SG.CFG.zones[this.zoneIdx].name, '');
+  },
+
+  /* =====================================================================
    *  БОСС
    * ===================================================================== */
 
@@ -848,7 +1135,7 @@ SG.GameScene = new Phaser.Class({
     this.introT = 0;
 
     // убираем всё, что не долетело
-    for (var i = this.ents.length - 1; i >= 0; i--) this.killEnt(this.ents[i], i, false);
+    this.clearEnts(false);
 
     // шапка донесла до босса — дальше он сам
     this.dropHat();
@@ -856,14 +1143,17 @@ SG.GameScene = new Phaser.Class({
     SG.Audio.stopMusic();
     SG.Audio.music('boss');
 
-    this.bossBaseX = Math.round(this.W * 0.74);
-    this.bossSpr = this.add.sprite(this.W + 120, this.G, 'boss_idle')
-      .setOrigin(0.5, 1).setDepth(12);
+    // выходит из подъезда и загораживает дверь
+    var doorX = this.gate ? this.gate.restX : Math.round(this.W * 0.86);
+    this.bossBaseX = Math.round(doorX - 118);
+    this.bossSpr = this.add.sprite(doorX, this.G, 'boss_idle')
+      .setOrigin(0.5, 1).setDepth(11);
     SG.Art.fit(this.bossSpr, 'boss_idle');
     this.boss = {
-      x: this.W + 120, hp: SG.CFG.boss.hp, maxHp: SG.CFG.boss.hp,
+      x: doorX, hp: SG.CFG.boss.hp, maxHp: SG.CFG.boss.hp,
       st: 'enter', t: 0, shots: 0, hitFlash: 0, vulnerable: false
     };
+    this.time.delayedCall(1100, function () { self.closeGateDoors(); });
 
     this.bossBarBg = this.add.rectangle(this.W / 2, 30, 260, 12, 0x171223, 0.75).setDepth(30).setAlpha(0);
     this.bossBar = this.add.rectangle(this.W / 2 - 128, 30, 256, 8, 0xe04b4b).setOrigin(0, 0.5).setDepth(30).setAlpha(0);
@@ -998,13 +1288,12 @@ SG.GameScene = new Phaser.Class({
   bossDie: function () {
     var self = this;
     this.phase = 'outro';
-    this.outroT = 0;
     this.boss.st = 'dead';
 
     SG.Audio.stopMusic();
     SG.Audio.sfx('win');
 
-    for (var i = this.ents.length - 1; i >= 0; i--) this.killEnt(this.ents[i], i, false);
+    this.clearEnts(false);
 
     this.tweens.add({ targets: [this.bossBarBg, this.bossBar, this.bossName], alpha: 0, duration: 400 });
     this.cameras.main.shake(500, 0.016);
@@ -1019,25 +1308,48 @@ SG.GameScene = new Phaser.Class({
 
     this.banner('ВСЁ, Я НА ВЫХОДНЫХ', 'спринт закрыт');
     this.time.delayedCall(400, function () { SG.Audio.music('run'); });
+    this.time.delayedCall(1500, function () { self.goHome(); });
   },
 
-  updateOutro: function (dt) {
-    this.outroT += dt;
-    this.scroll = Math.min(420, this.scroll + 500 * dt);
-    this.distPx += this.scroll * dt;
-    this.meters = this.distPx / this.PX_PER_M;
-    this.checkZone();
+  /* Дверь свободна: Серёга доходит до подъезда и заходит внутрь */
+  goHome: function () {
+    var self = this, g = this.gate;
+    this.openGateDoors();
 
-    if (this.outroT > 3.2) {
-      SG.state.score = Math.round(this.score);
-      SG.state.meters = Math.round(this.meters);
-      SG.state.kills = this.kills;
-      SG.state.usedHat = !!this.gift.hatWorn;
-      SG.state.usedDragon = !!this.gift.dragonUsed;
-      SG.state.saveBest(Math.round(this.score));
-      SG.state.markWon();
-      SG.Audio.stopMusic();
-      this.scene.start('Victory');
-    }
+    var target = g ? g.restX : this.W + 90;
+    var dist = Math.abs(target - this.heroX);
+    this.tweens.add({
+      targets: this, heroX: target, duration: Math.max(700, dist * 2.2), ease: 'Sine.easeIn',
+      delay: 350,
+      onComplete: function () {
+        self.heroFrozen = true;
+        self.heroSpr.setTexture('hero_idle');
+        self.tweens.add({ targets: [self.heroSpr, self.heroShadow], alpha: 0, duration: 420 });
+        self.time.delayedCall(520, function () {
+          self.closeGateDoors();
+          self.finish();
+        });
+      }
+    });
+  },
+
+  finish: function () {
+    var self = this;
+    var veil = this.add.rectangle(0, 0, this.W, this.H, 0x0d0a16, 1)
+      .setOrigin(0).setDepth(40).setAlpha(0);
+    this.tweens.add({
+      targets: veil, alpha: 1, duration: 700,
+      onComplete: function () {
+        SG.state.score = Math.round(self.score);
+        SG.state.meters = Math.round(self.meters);
+        SG.state.kills = self.kills;
+        SG.state.usedHat = !!self.gift.hatWorn;
+        SG.state.usedDragon = !!self.gift.dragonUsed;
+        SG.state.saveBest(Math.round(self.score));
+        SG.state.markWon();
+        SG.Audio.stopMusic();
+        self.scene.start('Victory');
+      }
+    });
   }
 });

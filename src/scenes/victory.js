@@ -22,7 +22,7 @@ SG.VictoryScene = new Phaser.Class({
       targets: this.hero, x: Math.round(W * 0.34), duration: 1500, ease: 'Sine.easeOut',
       onComplete: function () {
         self.running = false;
-        self.hero.setTexture('hero_atk0');
+        self.hero.setTexture('hero_idle');   // дома вспышка от аккорда ни к чему
         SG.Audio.init();
         SG.Audio.sfx('select');
       }

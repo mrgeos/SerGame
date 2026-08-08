@@ -5,6 +5,7 @@
     "hero_idle", "hero_run0", "hero_run1", "hero_run2", "hero_run3",
     "hero_air", "hero_atk0", "hero_atk1", "hero_hurt",
     "zombie0", "zombie1", "zombie2", "zombie3", "zombie_hit",
-    "boss_idle", "boss_windup", "boss_swing", "boss_hurt"
+    "boss_idle", "boss_windup", "boss_swing", "boss_hurt",
+    "wife", "daughter", "geos"
   ]
 }

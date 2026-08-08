@@ -632,7 +632,7 @@ SG.GameScene = new Phaser.Class({
     card.lineStyle(2, 0xf5c542, 0.95);
     card.strokeRoundedRect(-w / 2, -h / 2, w, h, 10);
 
-    var av = this.add.image(-w / 2 + 30, 0, 'geos').setScale(2);
+    var av = SG.Art.fit(this.add.image(-w / 2 + 30, 0, 'geos'), 'geos');
     var name = SG.txt(this, -w / 2 + 56, -h / 2 + 9, SG.CFG.geos.name, 13, '#f5c542',
       { originX: 0, originY: 0, strokeThickness: 3 });
     msg.setPosition(-w / 2 + 56, -h / 2 + 27);

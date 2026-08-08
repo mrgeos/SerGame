@@ -6,24 +6,28 @@
 window.SG = window.SG || {};
 
 SG.CFG = {
-  /* ---- Персонализация ------------------------------------------------- */
-  hero: 'СЕРЁГА',
-  wife: 'ЖЕНА',          // ← поставь имя
-  daughter: 'ДОЧКА',     // ← поставь имя
+  /* ---- Персонализация -------------------------------------------------
+   * В любом тексте игры можно писать {hero}, {wife}, {daughter} —
+   * подставится имя из этого блока. Заглавные варианты — {HERO}, {WIFE},
+   * {DAUGHTER} — подставят его же капсом (см. SG.fmt ниже).
+   * Имена держим в именительном падеже, тексты под это и написаны. */
+  hero: 'Серёга',
+  wife: 'Таня',
+  daughter: 'Майя',
   bossName: 'ГЛАВНЫЙ ЗОМБИ-МЕНЕДЖЕР',
 
   intro: [
     'Пятница. 18:59.',
-    'Дома ждут жена, дочка и торт.',
-    'Между Серёгой и тортом — таски и менеджеры.',
-    'У Серёги есть гитара.'
+    'Дома ждут {wife}, {daughter} и торт.',
+    'Дорогу перекрыли таски и менеджеры.',
+    'Но гитара уже на плече.'
   ],
 
   finale: {
-    title: 'С ДНЁМ РОЖДЕНИЯ, СЕРЁГА!',
+    title: 'С ДНЁМ РОЖДЕНИЯ, {HERO}!',
     lines: [
       'Все таски закрыты. Все созвоны отменены.',
-      'Дома — торт, жена и дочка.',
+      'Дома — торт, {wife} и {daughter}.',
       'Так пусть так будет каждую пятницу.'
     ]
   },
@@ -107,11 +111,23 @@ SG.VIEW = (function () {
   return { W: W, H: H, GROUND: 300, SCALE: 2 };
 })();
 
+/* Подстановка имён: {wife} → Таня, {WIFE} → ТАНЯ.
+ * Применяется ко всему тексту, который выводит SG.txt. */
+SG.fmt = function (s) {
+  if (typeof s !== 'string' || s.indexOf('{') === -1) return s;
+  return s.replace(/\{(hero|wife|daughter|HERO|WIFE|DAUGHTER)\}/g, function (m, key) {
+    var low = key.toLowerCase();
+    var val = SG.CFG[low];
+    if (val === undefined) return m;
+    return key === low ? val : val.toUpperCase();
+  });
+};
+
 /* Единый стиль текста */
 SG.FONT = '"Courier New", ui-monospace, monospace';
 SG.txt = function (scene, x, y, text, size, color, opts) {
   opts = opts || {};
-  var t = scene.add.text(x, y, text, {
+  var t = scene.add.text(x, y, SG.fmt(text), {
     fontFamily: SG.FONT,
     fontSize: size + 'px',
     color: color || '#f2e9d8',

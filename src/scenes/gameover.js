@@ -15,7 +15,8 @@ SG.GameOverScene = new Phaser.Class({
       'ТАСКИ ПОБЕДИЛИ',
       'МЕНЕДЖЕРЫ ЗАТЯНУЛИ НА СОЗВОН',
       'ТОРТ ОСТЫЛ',
-      'ЖЕНА УЖЕ ЗВОНИЛА'
+      '{WIFE} УЖЕ ЗВОНИЛА',
+      '{DAUGHTER} НЕ ЛОЖИТСЯ СПАТЬ'
     ];
     SG.txt(this, W / 2, 74, 'НЕ ДОШЁЛ', 40, '#e04b4b').setDepth(1);
     SG.txt(this, W / 2, 110, lines[Math.floor(Math.random() * lines.length)], 15, '#c9c3dd',

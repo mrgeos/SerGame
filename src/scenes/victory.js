@@ -44,12 +44,16 @@ SG.VictoryScene = new Phaser.Class({
     this.tweens.add({ targets: this.daughter, y: FLOOR - 12, duration: 380, yoyo: true, repeat: -1,
       delay: 900, ease: 'Sine.easeInOut' });
 
-    if (C.wife && C.wife !== 'ЖЕНА') {
-      SG.txt(this, this.wife.x, FLOOR + 14, C.wife, 11, '#c9c3dd', { strokeThickness: 3 }).setDepth(12);
+    if (C.wife) {
+      SG.txt(this, this.wife.x, FLOOR + 16, '{WIFE}', 12, '#f2e9d8', { strokeThickness: 3 }).setDepth(24);
     }
-    if (C.daughter && C.daughter !== 'ДОЧКА') {
-      SG.txt(this, this.daughter.x, FLOOR + 14, C.daughter, 11, '#c9c3dd', { strokeThickness: 3 }).setDepth(12);
+    if (C.daughter) {
+      SG.txt(this, this.daughter.x, FLOOR + 16, '{DAUGHTER}', 12, '#f2e9d8', { strokeThickness: 3 }).setDepth(24);
     }
+    // подпись героя ставим сразу в конечную точку — он до неё ещё бежит
+    var heroLabel = SG.txt(this, Math.round(W * 0.34), FLOOR + 16, '{HERO}', 12, '#f5c542',
+      { strokeThickness: 3 }).setDepth(24).setAlpha(0);
+    this.tweens.add({ targets: heroLabel, alpha: 1, duration: 300, delay: 1500 });
 
     this.confetti = [];
     this.time.delayedCall(1300, function () { self.showFinale(); });
@@ -109,7 +113,7 @@ SG.VictoryScene = new Phaser.Class({
     SG.txt(this, W / 2, sy, 'СЧЁТ ' + st.score + '   ·   ' + st.meters + ' м   ·   ' + st.kills + ' менеджеров',
       13, '#7de8ff', { strokeThickness: 3 }).setDepth(21);
 
-    var hint = SG.txt(this, W / 2, H - 30, 'ТАП — ПОБЕЖАТЬ ЕЩЁ РАЗ', 16, '#c9c3dd').setDepth(21);
+    var hint = SG.txt(this, W / 2, H - 12, 'ТАП — ПОБЕЖАТЬ ЕЩЁ РАЗ', 15, '#c9c3dd').setDepth(21);
     this.tweens.add({ targets: hint, alpha: 0.3, duration: 700, yoyo: true, repeat: -1 });
 
     this.time.delayedCall(900, function () {

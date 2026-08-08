@@ -487,7 +487,8 @@ SG.GameScene = new Phaser.Class({
 
     if (this.lives <= 0) {
       // у босса Геос не даёт проиграть — присылает дракона вместо поражения
-      if (this.phase === 'boss' && !this.gift.dragonOffered) {
+      // (включая выезд босса: попасть туда нечем, но дыры быть не должно)
+      if ((this.phase === 'boss' || this.phase === 'bossIntro') && !this.gift.dragonOffered) {
         this.lives = 1;
         this.refreshLives();
         this.offerDragon();

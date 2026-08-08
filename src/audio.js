@@ -134,7 +134,20 @@ SG.Audio = (function () {
     win:     function () { [64, 68, 71, 76, 71, 76, 83].forEach(function (n, i) {
                              tone({ freq: hz(n), type: 'square', dur: 0.28, vol: 0.22, at: i * 0.13 });
                              tone({ freq: hz(n - 12), type: 'triangle', dur: 0.3, vol: 0.14, at: i * 0.13 }); }); },
-    select:  function () { tone({ freq: hz(72), type: 'square', dur: 0.07, vol: 0.18 }); }
+    select:  function () { tone({ freq: hz(72), type: 'square', dur: 0.07, vol: 0.18 }); },
+
+    /* подгоны от Геоса */
+    msg:     function () { tone({ freq: hz(84), type: 'sine', dur: 0.1, vol: 0.22 });
+                           tone({ freq: hz(91), type: 'sine', dur: 0.16, vol: 0.2, at: 0.1 }); },
+    hatOn:   function () { [60, 64, 67, 72, 76, 79, 84].forEach(function (n, i) {
+                             tone({ freq: hz(n), type: 'square', dur: 0.1, vol: 0.2, at: i * 0.055 }); });
+                           noise({ dur: 0.5, freq: 900, vol: 0.1, filter: 'bandpass', at: 0.1 }); },
+    whirr:   function () { tone({ freq: 90, slideTo: 150, type: 'sawtooth', dur: 0.5, vol: 0.09 }); },
+    roar:    function () { tone({ freq: 110, slideTo: 40, type: 'sawtooth', dur: 1.1, vol: 0.34, through: dist });
+                           tone({ freq: 165, slideTo: 55, type: 'square', dur: 1.0, vol: 0.16, through: dist });
+                           noise({ dur: 1.2, freq: 420, vol: 0.3, filter: 'lowpass' }); },
+    fire:    function () { noise({ dur: 0.9, freq: 1200, vol: 0.32, filter: 'bandpass' });
+                           tone({ freq: 300, slideTo: 90, type: 'sawtooth', dur: 0.8, vol: 0.14, through: dist }); }
   };
 
   /* ---- фоновая музыка -------------------------------------------------- */

@@ -13,6 +13,9 @@ SG.Art = (function () {
     out:    '#171223',
     skin:   '#f0bd93', skinD: '#cf9469',
     hair:   '#4a3226', hairD: '#33221a',
+    /* Серёга: русый зачёс, очки в тёмной оправе, бородка клинышком */
+    hairS:  '#b98a4e', hairSL: '#dcae68', hairSD: '#8a6236',
+    beard:  '#96693a', beardD: '#7a5430', lens: '#46648a',
     tee:    '#25222f', teeL:  '#3a3650',
     jean:   '#3b5c9e', jeanD: '#2b4478',
     boot:   '#3c2f28',
@@ -113,27 +116,28 @@ SG.Art = (function () {
 
   /* Гитара: висит на бедре, гриф уходит вправо-вверх.
    * lift = 0 (покой) … 1 (замах на аккорд) */
+  /* Гитара висит низко, на бедре — так на груди остаётся место под принт */
   function guitar(g, lift) {
-    var bx = 12, by = 21;                    // центр корпуса
-    var tipX = 27, tipY = 15 - Math.round(lift * 7);
+    var bx = 12, by = 23;                    // центр корпуса
+    var tipX = 27, tipY = 16 - Math.round(lift * 7);
 
     // гриф
-    line(g, bx + 4, by - 1, tipX, tipY, 3, P.neck);
-    line(g, bx + 4, by - 1, tipX, tipY, 1, P.fret);
+    line(g, bx + 4, by - 2, tipX, tipY, 3, P.neck);
+    line(g, bx + 4, by - 2, tipX, tipY, 1, P.fret);
     // голова грифа
     px(g, tipX - 1, tipY - 1, 5, 5, P.woodD);
     px(g, tipX, tipY, 3, 2, P.gold);
 
     // корпус (двойной вырез — грубая «суперстратовская» форма)
-    ellipse(g, bx, by, 7, 6, P.gtr);
-    ellipse(g, bx + 3, by - 2, 5, 4, P.gtr);
-    ellipse(g, bx - 3, by + 1, 5, 5, P.gtrD);
-    ellipse(g, bx - 1, by - 2, 4, 3, P.gtrHi);
+    ellipse(g, bx, by, 6, 5, P.gtr);
+    ellipse(g, bx + 3, by - 2, 4, 3, P.gtr);
+    ellipse(g, bx - 3, by + 1, 4, 4, P.gtrD);
+    ellipse(g, bx - 1, by - 2, 3, 2, P.gtrHi);
     // струнодержатель + звукосниматели
-    px(g, bx + 1, by - 1, 4, 3, P.greyD);
-    px(g, bx - 2, by + 2, 5, 2, P.grey);
+    px(g, bx + 1, by - 1, 3, 3, P.greyD);
+    px(g, bx - 2, by + 2, 4, 2, P.grey);
     // струны
-    line(g, bx + 3, by - 1, tipX, tipY, 1, P.str);
+    line(g, bx + 3, by - 2, tipX, tipY, 1, P.str);
   }
 
   /* ноги: pose — 0..3 бег, 4 — в воздухе, 5 — стоит */
@@ -166,34 +170,45 @@ SG.Art = (function () {
 
     legs(g, pose === 'air' ? 4 : pose);
 
-    // корпус
+    // корпус — тёмная футболка
     px(g, 10, 13 + Y, 11, 10, P.tee);
     px(g, 10, 13 + Y, 2, 10, P.teeL);
-    // принт на футболке — молния
-    px(g, 15, 16 + Y, 2, 2, P.gold);
-    px(g, 14, 18 + Y, 2, 2, P.gold);
-    px(g, 16, 18 + Y, 2, 2, P.gold);
     // ремень
     px(g, 10, 23 + Y, 11, 2, P.hairD);
     px(g, 14, 23 + Y, 3, 2, P.gold);
     // ремень гитары через плечо
     line(g, 11, 13 + Y, 19, 22 + Y, 2, P.woodD);
+    // принт — череп. Рисуем после ремня, иначе он его перечёркивает
+    px(g, 13, 13 + Y, 5, 3, P.str);        // черепушка
+    px(g, 14, 14 + Y, 1, 2, P.out);        // глазницы
+    px(g, 16, 14 + Y, 1, 2, P.out);
+    px(g, 14, 16 + Y, 3, 1, P.str);        // челюсть
+    px(g, 15, 16 + Y, 1, 1, P.out);        // зубы
 
     // шея + голова
     px(g, 14, 11 + Y, 4, 3, P.skinD);
     px(g, 10, 4 + Y, 10, 9, P.skin);
     px(g, 10, 4 + Y, 2, 9, P.skinD);
-    // волосы
-    px(g, 9, 2 + Y, 12, 4, P.hair);
-    px(g, 8, 4 + Y, 2, 6, P.hair);
-    px(g, 9, 1 + Y, 5, 2, P.hair);
-    // ухо, глаз, бровь, рот
-    px(g, 11, 8 + Y, 2, 3, P.skinD);
-    px(g, 16, 7 + Y, 2, 2, P.out);
-    px(g, 16, 5 + Y, 3, 1, P.hairD);
-    px(g, 16, 10 + Y, 3, 1, P.skinD);
-    // щетина
-    px(g, 14, 11 + Y, 5, 1, P.hairD);
+    // волосы: короткие бока и зачёсанный вверх кок
+    px(g, 9, 2 + Y, 12, 3, P.hairS);
+    px(g, 13, 1 + Y, 8, 2, P.hairS);
+    px(g, 15, 1 + Y, 5, 1, P.hairSL);
+    px(g, 9, 5 + Y, 2, 2, P.hairSD);
+    px(g, 19, 3 + Y, 2, 2, P.hairSD);
+    // ухо
+    px(g, 12, 8 + Y, 2, 2, P.skinD);
+    // очки в тёмной прямоугольной оправе
+    px(g, 11, 7 + Y, 2, 1, P.out);          // заушник
+    px(g, 13, 6 + Y, 7, 3, P.out);          // оправа
+    px(g, 14, 7 + Y, 2, 1, P.lens);
+    px(g, 17, 7 + Y, 2, 1, P.lens);
+    px(g, 18, 7 + Y, 1, 1, P.white);        // блик на линзе
+    // нос
+    px(g, 19, 9 + Y, 1, 1, P.skinD);
+    // усы и бородка клинышком
+    px(g, 13, 10 + Y, 7, 2, P.beard);
+    px(g, 15, 12 + Y, 5, 1, P.beard);
+    px(g, 16, 11 + Y, 3, 1, P.out);         // рот
 
     guitar(g, lift);
 
@@ -428,6 +443,130 @@ SG.Art = (function () {
     px(g, 2, 0, 2, 6, col);
     px(g, 0, 2, 6, 2, col);
     return o;
+  }
+
+  /* =====================================================================
+   *  ПОДГОНЫ ОТ ГЕОСА
+   * ===================================================================== */
+
+  /* Купол шапки-дурилки: цветные дольки по радиусу */
+  function capDome(g, cx, cy, rx, ry) {
+    var cols = ['#e04b4b', '#f5c542', '#4fb06a', '#3d84e0'];
+    for (var y = cy - ry; y <= cy; y++) {
+      var k = (y - cy) / ry;
+      var hw = Math.floor(rx * Math.sqrt(Math.max(0, 1 - k * k)));
+      if (hw <= 0) continue;
+      for (var x = cx - hw; x <= cx + hw; x++) {
+        var t = (x - (cx - hw)) / Math.max(1, 2 * hw);
+        px(g, x, y, 1, 1, cols[Math.min(3, Math.floor(t * 4))]);
+      }
+    }
+  }
+
+  function hatCap(withProp) {
+    var o = cv(26, 20), g = o.g;
+    capDome(g, 12, 13, 9, 8);
+    px(g, 2, 13, 21, 3, P.tee);          // околыш
+    px(g, 15, 13, 9, 2, P.red);          // козырёк
+    px(g, 11, 4, 3, 2, P.white);         // кнопка сверху
+    px(g, 12, 1, 1, 4, P.greyL);         // штырь под пропеллер
+    if (withProp) {
+      px(g, 3, 1, 8, 2, P.str);
+      px(g, 14, 1, 8, 2, P.str);
+      px(g, 11, 0, 3, 4, P.greyL);
+    }
+    return outline(o, P.out);
+  }
+
+  function propeller() {
+    var o = cv(22, 6), g = o.g;
+    px(g, 0, 2, 9, 2, P.str);
+    px(g, 13, 2, 9, 2, P.str);
+    px(g, 1, 1, 4, 1, P.white);
+    px(g, 17, 3, 4, 1, P.greyL);
+    px(g, 9, 1, 4, 4, P.greyL);
+    return outline(o, P.out);
+  }
+
+  function dragonHead() {   // иконка подгона
+    var o = cv(22, 22), g = o.g;
+    ellipse(g, 11, 12, 8, 7, P.plant);
+    px(g, 15, 10, 7, 5, P.plant);        // морда
+    px(g, 17, 14, 5, 2, P.cherry);       // пасть
+    px(g, 6, 3, 3, 5, P.gold);           // рог
+    px(g, 12, 3, 3, 5, P.gold);
+    px(g, 15, 9, 3, 3, P.gold);          // глаз
+    px(g, 16, 10, 1, 1, P.out);
+    px(g, 3, 10, 5, 8, P.plantD);        // грива
+    return outline(o, P.out);
+  }
+
+  function dragon() {
+    var o = cv(80, 50), g = o.g;
+
+    // хвост: сужается к наконечнику
+    line(g, 24, 32, 14, 25, 5, P.plantD);
+    line(g, 14, 25, 7, 19, 3, P.plantD);
+    rows(g, [[17, 2, 6], [18, 1, 7], [19, 1, 7], [20, 2, 6], [21, 3, 4]], P.gold);
+
+    // тело
+    ellipse(g, 32, 30, 17, 10, P.plant);
+    ellipse(g, 32, 33, 13, 6, P.gold);        // брюхо
+
+    // крыло
+    rows(g, [[4, 34, 12], [6, 30, 18], [8, 27, 22], [10, 25, 25], [12, 24, 27],
+             [14, 24, 27], [16, 25, 25], [18, 27, 21]], P.plantD);
+    rows(g, [[8, 30, 14], [10, 29, 17], [12, 28, 19], [14, 29, 17]], P.plant);
+    line(g, 30, 20, 48, 6, 1, P.woodD);
+    line(g, 32, 21, 40, 5, 1, P.woodD);
+
+    // шея и голова
+    line(g, 44, 26, 58, 16, 7, P.plant);
+    px(g, 55, 10, 16, 11, P.plant);
+    px(g, 55, 10, 4, 11, P.plantD);
+    px(g, 68, 14, 10, 5, P.plant);            // морда
+    px(g, 68, 19, 11, 4, P.cherry);           // раскрытая пасть
+    for (var t = 0; t < 4; t++) px(g, 69 + t * 3, 19, 2, 2, P.white);
+    px(g, 64, 13, 4, 4, P.gold);              // глаз
+    px(g, 65, 14, 2, 2, P.out);
+    px(g, 58, 3, 4, 8, P.gold);               // рога
+    px(g, 65, 4, 4, 7, P.gold);
+    // гребень по шее
+    for (var s = 0; s < 4; s++) px(g, 46 + s * 3, 22 - s * 3, 3, 4, P.gold);
+
+    // лапы
+    px(g, 26, 38, 6, 8, P.plantD);
+    px(g, 38, 38, 6, 8, P.plantD);
+    px(g, 24, 44, 9, 3, P.gold);
+    px(g, 36, 44, 9, 3, P.gold);
+
+    return outline(o, P.out);
+  }
+
+  function flame() {
+    var o = cv(16, 16), g = o.g;
+    ellipse(g, 8, 9, 7, 6, '#e0642a');
+    ellipse(g, 8, 9, 5, 4, P.gold);
+    ellipse(g, 8, 8, 3, 3, '#fff3b0');
+    px(g, 7, 1, 3, 4, '#e0642a');
+    return o;
+  }
+
+  function geos() {   // аватарка друга в уведомлении
+    var o = cv(22, 22), g = o.g;
+    ellipse(g, 11, 12, 7, 7, P.skin);    // лицо
+    px(g, 4, 11, 3, 4, P.skinD);         // тень
+    rows(g, [[3, 5, 12], [4, 4, 14], [5, 4, 14]], '#3d84e0');   // кепка
+    px(g, 4, 6, 15, 2, '#2f66b0');       // козырёк
+    px(g, 10, 3, 3, 2, '#2f66b0');
+    px(g, 8, 10, 2, 2, P.out);           // глаза
+    px(g, 13, 10, 2, 2, P.out);
+    px(g, 8, 14, 1, 1, P.out);           // улыбка
+    px(g, 9, 15, 4, 1, P.out);
+    px(g, 13, 14, 1, 1, P.out);
+    px(g, 5, 19, 13, 3, P.plant);        // воротник
+    px(g, 10, 18, 3, 2, P.skinD);        // шея
+    return outline(o, P.out);
   }
 
   /* =====================================================================
@@ -692,6 +831,15 @@ SG.Art = (function () {
 
     pick_life:   pick,
     pick_coffee: coffee,
+
+    pick_hat:    function () { return hatCap(true); },
+    hat_worn:    function () { return hatCap(false); },
+    hat_prop:    propeller,
+    pick_dragon: dragonHead,
+    dragon:      dragon,
+    fx_flame:    flame,
+    geos:        geos,
+
     fx_slash:    slash,
     fx_wave:     wave,
     fx_note:     note,

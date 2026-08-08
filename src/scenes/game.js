@@ -37,6 +37,11 @@ SG.GameScene = new Phaser.Class({
     this.ents = [];
     this.paused = false;
 
+    // подгоны от Геоса: выдаются один раз за забег
+    this.gift = { hatOffered: false, hatOn: false, dragonOffered: false, dragonUsed: false };
+    this.cinematic = false;
+    this.bossElapsed = 0;
+
     this.buildWorld();
     this.buildHero();
     this.buildHud();
@@ -125,7 +130,7 @@ SG.GameScene = new Phaser.Class({
    * ===================================================================== */
 
   doJump: function () {
-    if (this.phase === 'dead' || this.phase === 'outro') return;
+    if (this.phase === 'dead' || this.phase === 'outro' || this.cinematic) return;
     var h = this.hero, C = SG.CFG.run;
     if (h.onGround) {
       h.vy = C.jumpVel; h.onGround = false; h.jumps = 1;
@@ -139,7 +144,7 @@ SG.GameScene = new Phaser.Class({
   },
 
   doAttack: function () {
-    if (this.phase === 'dead' || this.phase === 'outro') return;
+    if (this.phase === 'dead' || this.phase === 'outro' || this.cinematic) return;
     var now = this.time.now, C = SG.CFG.run;
     if (now < this.hero.cdUntil) return;
     this.hero.attackUntil = now + C.attackActiveMs;
@@ -173,10 +178,11 @@ SG.GameScene = new Phaser.Class({
 
     if (this.phase === 'run') this.updateRun(dt);
     else if (this.phase === 'bossIntro') this.updateBossIntro(dt);
-    else if (this.phase === 'boss') this.updateBoss(dt);
+    else if (this.phase === 'boss' && !this.cinematic) this.updateBoss(dt);
     else if (this.phase === 'outro') this.updateOutro(dt);
 
     this.updateHero(dt);
+    this.updateHat(dt);
     this.updateEnts(dt);
     this.updateScroll(dt);
     this.updateHud(dt);
@@ -196,7 +202,7 @@ SG.GameScene = new Phaser.Class({
     this.score += C.score.perMeter * (this.scroll * dt) / this.PX_PER_M;
 
     this.speed = Math.min(C.run.maxSpeed, C.run.startSpeed + this.meters * C.run.accelPerMeter);
-    this.scroll = this.speed;
+    this.scroll = this.speed * (this.gift.hatOn ? C.hat.speedMul : 1);
 
     this.checkZone();
 
@@ -211,6 +217,11 @@ SG.GameScene = new Phaser.Class({
     if (this.pickupTimer <= 0) {
       this.spawnPickup();
       this.pickupTimer = 15 + Math.random() * 9;
+    }
+
+    if (this.gift.hatOffered && !this.gift.hatWorn && this.hatDeadline &&
+        this.time.now > this.hatDeadline) {
+      this.wearHat();
     }
 
     if (this.meters >= C.run.bossAtMeters) this.startBoss();
@@ -337,7 +348,8 @@ SG.GameScene = new Phaser.Class({
   updateEnts: function (dt) {
     var now = this.time.now;
     var atk = now < this.hero.attackUntil;
-    var shred = now < this.shredUntil;
+    // шапка-дурилка работает как бесконечный «шред»: сносит всё телом
+    var shred = now < this.shredUntil || this.gift.hatOn;
     var C = SG.CFG.run;
 
     var hx = this.heroX, hcy = this.hero.y - 32, hhw = 15, hhh = 30;
@@ -421,6 +433,16 @@ SG.GameScene = new Phaser.Class({
   },
 
   takePickup: function (e, idx) {
+    if (e.sub === 'hat') {
+      this.killEnt(e, idx, false);
+      this.wearHat();
+      return;
+    }
+    if (e.sub === 'dragon') {
+      this.killEnt(e, idx, false);
+      this.dragonFinish();
+      return;
+    }
     if (e.sub === 'life') {
       if (this.lives < SG.CFG.run.lives) this.lives++;
       else this.addScore(150);
@@ -439,7 +461,12 @@ SG.GameScene = new Phaser.Class({
 
   hurt: function () {
     var now = this.time.now;
+    if (this.phase === 'dead') return;
     if (now < this.hero.invulnUntil) return;
+    if (this.gift.hatOn || this.cinematic) return;      // в шапке-дурилке урона нет
+    // Геос уже написал — до шапки добить не дадим, иначе подгон бессмыслен
+    if (this.gift.hatOffered && !this.gift.hatWorn) return;
+
     this.lives--;
     this.combo = 0;
     this.comboTxt.setAlpha(0);
@@ -449,7 +476,21 @@ SG.GameScene = new Phaser.Class({
     SG.Audio.sfx('hurt');
     this.cameras.main.shake(220, 0.012);
     this.cameras.main.flash(120, 200, 60, 60);
-    if (this.lives <= 0) this.die();
+
+    if (this.lives <= 0) {
+      // у босса Геос не даёт проиграть — присылает дракона вместо поражения
+      if (this.phase === 'boss' && !this.gift.dragonOffered) {
+        this.lives = 1;
+        this.refreshLives();
+        this.offerDragon();
+        return;
+      }
+      this.die();
+      return;
+    }
+
+    // осталась последняя жизнь — прилетает шапка-дурилка
+    if (this.phase === 'run' && this.lives === 1 && !this.gift.hatOffered) this.offerHat();
   },
 
   refreshLives: function () {
@@ -544,6 +585,216 @@ SG.GameScene = new Phaser.Class({
   },
 
   /* =====================================================================
+   *  ПОДГОНЫ ОТ ГЕОСА
+   *
+   *  Идея: подарок нельзя проиграть. На последней жизни приходит шапка-
+   *  дурилка и проносит Серёгу до босса. Если и с боссом не задалось —
+   *  прилетает дракон и заканчивает разговор.
+   * ===================================================================== */
+
+  /* Уведомление в духе мессенджера, выезжает сверху */
+  geosMessage: function (text, holdMs) {
+    var W = this.W;
+    var w = Math.min(W - 48, 470);
+    var msg = SG.txt(this, 0, 0, text, 13, '#f2e9d8',
+      { originX: 0, originY: 0, strokeThickness: 3, align: 'left', wrap: w - 78 });
+    var h = Math.max(56, msg.height + 34);
+
+    var card = this.add.graphics();
+    card.fillStyle(0x171223, 0.94);
+    card.fillRoundedRect(-w / 2, -h / 2, w, h, 10);
+    card.lineStyle(2, 0xf5c542, 0.95);
+    card.strokeRoundedRect(-w / 2, -h / 2, w, h, 10);
+
+    var av = this.add.image(-w / 2 + 30, 0, 'geos').setScale(2);
+    var name = SG.txt(this, -w / 2 + 56, -h / 2 + 9, SG.CFG.geos.name, 13, '#f5c542',
+      { originX: 0, originY: 0, strokeThickness: 3 });
+    msg.setPosition(-w / 2 + 56, -h / 2 + 27);
+
+    var box = this.add.container(W / 2, -h).setDepth(35);
+    box.add([card, av, name, msg]);
+
+    SG.Audio.sfx('msg');
+    this.tweens.add({
+      targets: box, y: h / 2 + 14, duration: 380, ease: 'Back.easeOut',
+      hold: holdMs || 2400, yoyo: true,
+      onComplete: function () { box.destroy(); }
+    });
+  },
+
+  /* Реплика героя в пузыре */
+  say: function (text, ms) {
+    var x = this.heroX + 30, y = this.hero.y - 104;
+    var t = SG.txt(this, 0, 0, text, 14, '#171223',
+      { originX: 0.5, originY: 0.5, strokeThickness: 0 });
+    var w = t.width + 22, h = t.height + 16;
+
+    var g = this.add.graphics();
+    g.fillStyle(0xf2e9d8, 1);
+    g.fillRoundedRect(-w / 2, -h / 2, w, h, 8);
+    g.fillTriangle(-10, h / 2 - 1, 2, h / 2 - 1, -12, h / 2 + 12);
+
+    var box = this.add.container(x, y).setDepth(34).setScale(0.5).setAlpha(0);
+    box.add([g, t]);
+    this.tweens.add({ targets: box, scale: 1, alpha: 1, duration: 200, ease: 'Back.easeOut' });
+    this.time.delayedCall(ms || 1500, function () {
+      box.destroy();
+    });
+    return box;
+  },
+
+  offerHat: function () {
+    var self = this, C = SG.CFG;
+    this.gift.hatOffered = true;
+
+    this.geosMessage(C.geos.hatMsg, 2600);
+
+    // расчищаем полосу: и то, что уже летит, и ближайшие спавны
+    for (var i = this.ents.length - 1; i >= 0; i--) {
+      if (this.ents[i].kind !== 'pickup') this.killEnt(this.ents[i], i, true);
+    }
+    this.spawnTimer = Math.max(this.spawnTimer, C.hat.clearLaneSec);
+    // страховка: если шапку каким-то чудом не подобрали — надеваем сами
+    this.hatDeadline = this.time.now + C.hat.spawnDelayMs + 9000;
+
+    this.time.delayedCall(C.hat.spawnDelayMs, function () {
+      if (self.phase !== 'run' || self.gift.hatOn) return;
+      // на уровне головы и с щедрым хитбоксом — промахнуться нельзя,
+      // иначе вся страховка теряет смысл
+      var y = self.G - 72;
+      var spr = self.add.sprite(self.W + 60, y, 'pick_hat')
+        .setOrigin(0.5, 0.5).setScale(self.S).setDepth(10);
+      self.tweens.add({ targets: spr, angle: 12, duration: 500, yoyo: true, repeat: -1 });
+      self.addEnt({
+        kind: 'pickup', sub: 'hat', obj: spr, x: self.W + 60, cy: y,
+        hw: 30, hh: 30, vx: 0, baseY: y, t: 0
+      });
+      self.floatText(self.W - 70, self.G - 150, C.geos.hatHint, '#f5c542');
+      SG.Audio.sfx('whirr');
+    });
+  },
+
+  wearHat: function () {
+    var C = SG.CFG;
+    this.gift.hatOn = true;
+    this.gift.hatWorn = true;
+    this.hero.invulnUntil = 0;                 // мигание больше не нужно
+
+    // шапка едет на голове, пропеллер крутится отдельно
+    this.hatSpr = this.add.image(this.heroX - 1, this.hero.y - 54, 'hat_worn')
+      .setOrigin(0.5, 1).setScale(this.S).setDepth(13);
+    // пропеллер держим над куполом, а не поверх него
+    this.hatProp = this.add.image(this.heroX - 1, 0, 'hat_prop')
+      .setOrigin(0.5, 0.5).setScale(this.S).setDepth(13);
+    this.hatProp.y = this.hatSpr.y - this.hatSpr.displayHeight + 8;
+
+    SG.Audio.sfx('hatOn');
+    this.cameras.main.flash(260, 255, 230, 150);
+    this.banner(C.geos.hatWorn, 'таски больше не проблема');
+    this.burst(this.heroX, this.hero.y - 60, 'fx_spark', 14);
+    this.speedLines = [];
+  },
+
+  dropHat: function () {
+    if (!this.gift.hatOn) return;
+    this.gift.hatOn = false;
+    var h = this.hatSpr, p = this.hatProp;
+    this.hatSpr = null; this.hatProp = null;
+    this.tweens.add({
+      targets: [h, p], y: '-=60', x: '-=90', alpha: 0, angle: 200, duration: 900,
+      onComplete: destroyTargets
+    });
+    this.floatText(this.heroX, this.G - 130, SG.CFG.geos.hatOff, '#c9c3dd');
+  },
+
+  updateHat: function (dt) {
+    if (!this.gift.hatOn || !this.hatSpr) return;
+    this.hatSpr.y = this.hero.y - 54;
+    this.hatProp.y = this.hatSpr.y - this.hatSpr.displayHeight + 8;
+    this.hatProp.rotation += dt * 26;
+
+    // полосы скорости
+    if (Math.random() < 0.6) {
+      var y = this.G - 20 - Math.random() * 130;
+      var ln = this.add.rectangle(this.W + 20, y, 30 + Math.random() * 40, 2,
+        0xf5c542, 0.5).setDepth(9);
+      this.tweens.add({
+        targets: ln, x: -80, alpha: 0, duration: 420 + Math.random() * 200,
+        onComplete: destroyTargets
+      });
+    }
+  },
+
+  offerDragon: function () {
+    var self = this, C = SG.CFG;
+    if (this.gift.dragonOffered) return;
+    this.gift.dragonOffered = true;
+
+    this.geosMessage(C.geos.dragonMsg, 2600);
+
+    this.time.delayedCall(1400, function () {
+      if (self.phase !== 'boss' || self.gift.dragonUsed) return;
+      var y = self.G - 75;
+      var spr = self.add.sprite(self.W + 50, y, 'pick_dragon')
+        .setOrigin(0.5, 0.5).setScale(self.S).setDepth(10);
+      self.addEnt({
+        kind: 'pickup', sub: 'dragon', obj: spr, x: self.W + 50, cy: y,
+        hw: 30, hh: 30, vx: -170, baseY: y, t: 0
+      });
+      self.floatText(self.W - 80, self.G - 160, C.geos.dragonHint, '#f5c542');
+      SG.Audio.sfx('whirr');
+    });
+  },
+
+  /* Дракон прилетает и заканчивает спор с боссом */
+  dragonFinish: function () {
+    var self = this, C = SG.CFG;
+    this.gift.dragonUsed = true;
+    this.cinematic = true;
+
+    // сносим летящие таски, чтобы не мешали смотреть
+    for (var i = this.ents.length - 1; i >= 0; i--) this.killEnt(this.ents[i], i, false);
+
+    this.heroSpr.setTexture('hero_atk0');
+    this.say(C.geos.dragonLine, 2000);
+
+    this.time.delayedCall(1300, function () {
+      SG.Audio.sfx('roar');
+      self.cameras.main.shake(900, 0.008);
+
+      var d = self.add.sprite(-140, self.G - 175, 'dragon')
+        .setOrigin(0.5, 0.5).setScale(self.S).setDepth(18);
+      self.tweens.add({
+        targets: d, y: self.G - 155, duration: 420, yoyo: true, repeat: 3, ease: 'Sine.easeInOut'
+      });
+      self.tweens.add({
+        targets: d, x: self.W + 180, duration: 2600, ease: 'Sine.easeInOut',
+        onComplete: destroyTargets
+      });
+
+      // огонь по боссу на подлёте
+      self.time.delayedCall(1200, function () {
+        SG.Audio.sfx('fire');
+        self.cameras.main.flash(500, 255, 190, 90);
+        var bx = self.boss ? self.boss.x : self.W * 0.74;
+        for (var k = 0; k < 26; k++) {
+          (function (k) {
+            self.time.delayedCall(k * 24, function () {
+              self.burst(bx + (Math.random() - 0.5) * 90, self.G - 40 - Math.random() * 110,
+                'fx_flame', 3);
+            });
+          })(k);
+        }
+      });
+
+      self.time.delayedCall(1900, function () {
+        self.cinematic = false;
+        if (self.boss && self.boss.hp > 0) self.bossHit(self.boss.hp);
+      });
+    });
+  },
+
+  /* =====================================================================
    *  БОСС
    * ===================================================================== */
 
@@ -554,6 +805,9 @@ SG.GameScene = new Phaser.Class({
 
     // убираем всё, что не долетело
     for (var i = this.ents.length - 1; i >= 0; i--) this.killEnt(this.ents[i], i, false);
+
+    // шапка донесла до босса — дальше он сам
+    this.dropHat();
 
     SG.Audio.stopMusic();
     SG.Audio.music('boss');
@@ -626,6 +880,14 @@ SG.GameScene = new Phaser.Class({
     var b = this.boss, C = SG.CFG.boss, now = this.time.now;
     b.t += dt * 1000;
     if (b.hitFlash > 0) b.hitFlash -= dt * 1000;
+
+    // затянулось и HP почти не тронуто — Геос присылает дракона
+    this.bossElapsed += dt;
+    if (!this.gift.dragonOffered &&
+        this.bossElapsed > SG.CFG.dragon.stallSec &&
+        b.hp > b.maxHp * SG.CFG.dragon.stallHpFrac) {
+      this.offerDragon();
+    }
 
     var atk = now < this.hero.attackUntil;
     var inRange = Math.abs(b.x - this.heroX) < SG.CFG.run.attackRange + 60;
@@ -719,6 +981,8 @@ SG.GameScene = new Phaser.Class({
       SG.state.score = Math.round(this.score);
       SG.state.meters = Math.round(this.meters);
       SG.state.kills = this.kills;
+      SG.state.usedHat = !!this.gift.hatWorn;
+      SG.state.usedDragon = !!this.gift.dragonUsed;
       SG.state.saveBest(Math.round(this.score));
       SG.state.markWon();
       SG.Audio.stopMusic();

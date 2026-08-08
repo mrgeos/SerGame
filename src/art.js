@@ -1225,21 +1225,42 @@ SG.Art = (function () {
     hero_air: 1, hero_idle: 1, hero_atk0: 1, hero_atk1: 1, hero_hurt: 1
   };
 
+  /* Эталонные размеры: сколько спрайт занимает на экране в игровых точках.
+   * Заполняется при отрисовке кода-арта и не зависит от того, какой
+   * картинкой его потом подменят. */
+  var DESIGN = {};
+
   return {
     P: P,
     HI: HI,
+    DESIGN: DESIGN,
     KEYS: Object.keys(BUILDERS),
 
-    /* Во сколько раз растягивать спрайт при выводе */
+    /* Во сколько раз растягивать нарисованный кодом спрайт */
     scaleFor: function (key) { return HI[key] ? 1 : SG.VIEW.SCALE; },
 
-    /* Рисует всё, чего ещё нет в кэше текстур (загруженные PNG не трогает) */
+    /* Рисует всё, чего ещё нет в кэше текстур, и запоминает эталонные размеры */
     build: function (scene) {
       SG.Art.KEYS.forEach(function (key) {
         if (scene.textures.exists(key)) return;
         var o = BUILDERS[key]();
         scene.textures.addCanvas(key, o.c);
+        var s = HI[key] ? 1 : SG.VIEW.SCALE;
+        DESIGN[key] = { w: o.w, h: o.h, dw: o.w * s, dh: o.h * s };
       });
+    },
+
+    /* Подгоняет спрайт под эталонный размер независимо от разрешения
+     * картинки. Благодаря этому вместо кода-арта можно положить PNG
+     * любого размера — хоть 1024px, он встанет на своё место. */
+    fit: function (obj, key, mul) {
+      var d = DESIGN[key];
+      if (!d) return obj;
+      var img = obj.texture && obj.texture.getSourceImage
+        ? obj.texture.getSourceImage() : null;
+      var w = (img && img.width) ? img.width : d.w;
+      obj.setScale((d.dw / w) * (mul === undefined ? 1 : mul));
+      return obj;
     }
   };
 })();

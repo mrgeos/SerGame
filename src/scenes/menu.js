@@ -16,8 +16,8 @@ SG.MenuScene = new Phaser.Class({
     this.add.rectangle(0, 0, W, H, 0x171223, 0.35).setOrigin(0);
 
     // Серёга бежит на месте
-    this.hero = this.add.sprite(W * 0.5, G + 4, 'hero_run0')
-      .setOrigin(0.5, 1).setScale(SG.Art.scaleFor('hero_run0'));
+    this.hero = SG.Art.fit(
+      this.add.sprite(W * 0.5, G + 4, 'hero_run0').setOrigin(0.5, 1), 'hero_run0');
     this.t = 0;
 
     SG.txt(this, W / 2, 52, C.hero.toUpperCase(), 42, '#f5c542');

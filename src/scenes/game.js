@@ -83,7 +83,8 @@ SG.GameScene = new Phaser.Class({
       runT: 0
     };
     this.heroSpr = this.add.sprite(this.heroX, G, 'hero_run0')
-      .setOrigin(0.5, 1).setScale(SG.Art.scaleFor('hero_run0')).setDepth(12);
+      .setOrigin(0.5, 1).setDepth(12);
+    SG.Art.fit(this.heroSpr, 'hero_run0');
     this.heroShadow = this.add.ellipse(this.heroX, G + 2, 44, 10, 0x171223, 0.35).setDepth(11);
   },
 
@@ -92,7 +93,7 @@ SG.GameScene = new Phaser.Class({
     this.lifeIcons = [];
     for (var i = 0; i < SG.CFG.run.lives; i++) {
       this.lifeIcons.push(
-        this.add.image(18 + i * 26, 20, 'pick_life').setScale(1.4).setDepth(30)
+        SG.Art.fit(this.add.image(18 + i * 26, 20, 'pick_life').setDepth(30), 'pick_life', 0.7)
       );
     }
     this.scoreTxt = SG.txt(this, W - 12, 12, '0', 20, '#f5c542', { originX: 1, originY: 0 });
@@ -154,14 +155,16 @@ SG.GameScene = new Phaser.Class({
     SG.Audio.chord();
 
     var sl = this.add.image(this.heroX + 38, this.hero.y - 34, 'fx_slash')
-      .setScale(this.S * 0.9).setDepth(14).setBlendMode(Phaser.BlendModes.ADD);
+      .setDepth(14).setBlendMode(Phaser.BlendModes.ADD);
+    SG.Art.fit(sl, 'fx_slash', 0.9);
     this.tweens.add({
-      targets: sl, alpha: 0, scaleX: this.S * 1.25, duration: C.attackActiveMs + 90,
+      targets: sl, alpha: 0, scaleX: sl.scaleX * 1.4, duration: C.attackActiveMs + 90,
       onComplete: function () { sl.destroy(); }
     });
 
     // нотка + название аккорда
-    var n = this.add.image(this.heroX + 52, this.hero.y - 70, 'fx_note').setScale(this.S).setDepth(14);
+    var n = this.add.image(this.heroX + 52, this.hero.y - 70, 'fx_note').setDepth(14);
+    SG.Art.fit(n, 'fx_note');
     this.tweens.add({
       targets: n, y: n.y - 34, x: n.x + 22, alpha: 0, duration: 520,
       onComplete: function () { n.destroy(); }
@@ -274,7 +277,8 @@ SG.GameScene = new Phaser.Class({
     var cols = ['card_blue', 'card_green', 'card_violet'];
     var box = this.add.container(x, G).setDepth(10);
     var spr = this.add.sprite(0, 0, cols[Math.floor(Math.random() * cols.length)])
-      .setOrigin(0.5, 1).setScale(this.S);
+      .setOrigin(0.5, 1);
+    SG.Art.fit(spr, spr.texture.key);
     var label = SG.txt(this, 0, -62, SG.CFG.tasks[textIdx % SG.CFG.tasks.length], 11,
       '#f2e9d8', { strokeThickness: 3 });
     box.add([spr, label]);
@@ -284,7 +288,7 @@ SG.GameScene = new Phaser.Class({
   spawnFlyer: function (x) {
     var G = this.G;
     var box = this.add.container(x, G - 70).setDepth(10);
-    var spr = this.add.sprite(0, 0, 'card_fly').setOrigin(0.5, 0.5).setScale(this.S);
+    var spr = SG.Art.fit(this.add.sprite(0, 0, 'card_fly').setOrigin(0.5, 0.5), 'card_fly');
     var label = SG.txt(this, 0, -40, 'СРОЧНО!!!', 11, '#ffb3a6', { strokeThickness: 3 });
     box.add([spr, label]);
     var e = this.addEnt({ kind: 'flyer', obj: box, x: x, cy: G - 70, hw: 30, hh: 20, vx: -40, smashable: true, baseY: G - 70, t: 0 });
@@ -293,7 +297,7 @@ SG.GameScene = new Phaser.Class({
 
   spawnZombie: function (x) {
     var G = this.G;
-    var spr = this.add.sprite(x, G, 'zombie0').setOrigin(0.5, 1).setScale(this.S).setDepth(10);
+    var spr = SG.Art.fit(this.add.sprite(x, G, 'zombie0').setOrigin(0.5, 1).setDepth(10), 'zombie0');
     var e = this.addEnt({ kind: 'zombie', obj: spr, x: x, cy: G - 34, hw: 20, hh: 30, vx: -95, smashable: true, t: 0 });
     if (Math.random() < 0.5) {
       var say = SG.txt(this, x, G - 82, SG.CFG.taunts[Math.floor(Math.random() * SG.CFG.taunts.length)],
@@ -307,7 +311,8 @@ SG.GameScene = new Phaser.Class({
     if (!kind) kind = (this.lives < SG.CFG.run.lives && Math.random() < 0.65) ? 'life' : 'coffee';
     var y = this.G - 118;
     var spr = this.add.sprite(this.W + 60, y, kind === 'life' ? 'pick_life' : 'pick_coffee')
-      .setOrigin(0.5, 0.5).setScale(this.S).setDepth(10);
+      .setOrigin(0.5, 0.5).setDepth(10);
+    SG.Art.fit(spr, spr.texture.key);
     return this.addEnt({ kind: 'pickup', sub: kind, obj: spr, x: this.W + 60, cy: y, hw: 22, hh: 22, vx: 0, baseY: y, t: 0 });
   },
 
@@ -558,7 +563,7 @@ SG.GameScene = new Phaser.Class({
 
   burst: function (x, y, tex, n) {
     for (var i = 0; i < n; i++) {
-      var p = this.add.image(x, y, tex).setScale(this.S).setDepth(16);
+      var p = SG.Art.fit(this.add.image(x, y, tex).setDepth(16), tex);
       var a = Math.random() * Math.PI * 2, r = 30 + Math.random() * 55;
       this.tweens.add({
         targets: p, x: x + Math.cos(a) * r, y: y + Math.sin(a) * r,
@@ -665,7 +670,8 @@ SG.GameScene = new Phaser.Class({
       // иначе вся страховка теряет смысл
       var y = self.G - 72;
       var spr = self.add.sprite(self.W + 60, y, 'pick_hat')
-        .setOrigin(0.5, 0.5).setScale(self.S).setDepth(10);
+        .setOrigin(0.5, 0.5).setDepth(10);
+      SG.Art.fit(spr, 'pick_hat');
       self.tweens.add({ targets: spr, angle: 12, duration: 500, yoyo: true, repeat: -1 });
       self.addEnt({
         kind: 'pickup', sub: 'hat', obj: spr, x: self.W + 60, cy: y,
@@ -684,10 +690,12 @@ SG.GameScene = new Phaser.Class({
 
     // шапка едет на голове, пропеллер крутится отдельно
     this.hatSpr = this.add.image(this.heroX - 1, this.hero.y - 54, 'hat_worn')
-      .setOrigin(0.5, 1).setScale(this.S).setDepth(13);
+      .setOrigin(0.5, 1).setDepth(13);
+    SG.Art.fit(this.hatSpr, 'hat_worn');
     // пропеллер держим над куполом, а не поверх него
     this.hatProp = this.add.image(this.heroX - 1, 0, 'hat_prop')
-      .setOrigin(0.5, 0.5).setScale(this.S).setDepth(13);
+      .setOrigin(0.5, 0.5).setDepth(13);
+    SG.Art.fit(this.hatProp, 'hat_prop');
     this.hatProp.y = this.hatSpr.y - this.hatSpr.displayHeight + 8;
 
     SG.Audio.sfx('hatOn');
@@ -745,7 +753,8 @@ SG.GameScene = new Phaser.Class({
       if (self.phase !== 'boss' || self.gift.dragonUsed) return;
       var y = self.G - 75;
       var spr = self.add.sprite(self.W + 50, y, 'pick_dragon')
-        .setOrigin(0.5, 0.5).setScale(self.S).setDepth(10);
+        .setOrigin(0.5, 0.5).setDepth(10);
+      SG.Art.fit(spr, 'pick_dragon');
       self.addEnt({
         kind: 'pickup', sub: 'dragon', obj: spr, x: self.W + 50, cy: y,
         hw: 30, hh: 30, vx: -170, baseY: y, t: 0
@@ -772,7 +781,8 @@ SG.GameScene = new Phaser.Class({
       self.cameras.main.shake(900, 0.008);
 
       var d = self.add.sprite(-140, self.G - 175, 'dragon')
-        .setOrigin(0.5, 0.5).setScale(self.S).setDepth(18);
+        .setOrigin(0.5, 0.5).setDepth(18);
+      SG.Art.fit(d, 'dragon');
       self.tweens.add({
         targets: d, y: self.G - 155, duration: 420, yoyo: true, repeat: 3, ease: 'Sine.easeInOut'
       });
@@ -823,7 +833,8 @@ SG.GameScene = new Phaser.Class({
 
     this.bossBaseX = Math.round(this.W * 0.74);
     this.bossSpr = this.add.sprite(this.W + 120, this.G, 'boss_idle')
-      .setOrigin(0.5, 1).setScale(this.S).setDepth(12);
+      .setOrigin(0.5, 1).setDepth(12);
+    SG.Art.fit(this.bossSpr, 'boss_idle');
     this.boss = {
       x: this.W + 120, hp: SG.CFG.boss.hp, maxHp: SG.CFG.boss.hp,
       st: 'enter', t: 0, shots: 0, hitFlash: 0, vulnerable: false
@@ -865,7 +876,8 @@ SG.GameScene = new Phaser.Class({
   spawnShot: function (high) {
     var y = high ? this.G - 70 : this.G - 26;
     var spr = this.add.sprite(this.boss.x - 40, y, high ? 'card_fly' : 'card_blue')
-      .setOrigin(0.5, 0.5).setScale(this.S * 0.85).setDepth(10);
+      .setOrigin(0.5, 0.5).setDepth(10);
+    SG.Art.fit(spr, spr.texture.key, 0.85);
     this.addEnt({
       kind: 'shot', obj: spr, x: this.boss.x - 40, cy: y,
       hw: 26, hh: 18, vx: high ? -330 : -390,

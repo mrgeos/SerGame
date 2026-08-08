@@ -26,21 +26,25 @@ SG.BootScene = new Phaser.Class({
 
   create: function () {
     var self = this;
+
+    // Сначала всегда рисуем код-арт: отсюда берутся эталонные размеры,
+    // под которые потом подгоняются подменяющие картинки.
+    SG.Art.build(this);
+
     var man = this.cache.json.get('sprite_manifest');
     var list = (man && Array.isArray(man.sprites)) ? man.sprites : [];
+    var use = list.filter(function (key) { return SG.Art.KEYS.indexOf(key) !== -1; });
 
-    function finish() {
-      SG.Art.build(self);
-      self.scene.start('Menu');
-    }
+    if (!use.length) { this.scene.start('Menu'); return; }
 
-    if (!list.length) { finish(); return; }
-
-    list.forEach(function (key) {
-      if (SG.Art.KEYS.indexOf(key) === -1) return;   // неизвестный ключ — пропускаем
+    use.forEach(function (key) {
+      self.textures.remove(key);                     // освобождаем ключ под PNG
       self.load.image(key, 'assets/sprites/' + key + '.png');
     });
-    this.load.once('complete', finish);
+    this.load.once('complete', function () {
+      SG.Art.build(self);        // что не загрузилось — вернём код-артом
+      self.scene.start('Menu');
+    });
     this.load.start();
   }
 });

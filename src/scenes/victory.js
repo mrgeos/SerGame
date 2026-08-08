@@ -14,8 +14,8 @@ SG.VictoryScene = new Phaser.Class({
     this.buildRoom(W, H, FLOOR);
 
     // Серёга вбегает слева
-    this.hero = this.add.sprite(-50, FLOOR, 'hero_run0')
-      .setOrigin(0.5, 1).setScale(SG.Art.scaleFor('hero_run0')).setDepth(12);
+    this.hero = SG.Art.fit(
+      this.add.sprite(-50, FLOOR, 'hero_run0').setOrigin(0.5, 1).setDepth(12), 'hero_run0');
     this.runT = 0; this.running = true;
     this.tweens.add({
       targets: this.hero, x: Math.round(W * 0.34), duration: 1500, ease: 'Sine.easeOut',
@@ -32,15 +32,15 @@ SG.VictoryScene = new Phaser.Class({
     this.add.rectangle(tx, FLOOR, 130, 10, 0x7a5330).setOrigin(0.5, 1).setDepth(9);
     this.add.rectangle(tx - 48, FLOOR + 0, 10, 46, 0x553719).setOrigin(0.5, 0).setDepth(8);
     this.add.rectangle(tx + 48, FLOOR + 0, 10, 46, 0x553719).setOrigin(0.5, 0).setDepth(8);
-    this.cake = this.add.image(tx, FLOOR - 10, 'cake')
-      .setOrigin(0.5, 1).setScale(S * 0.75).setDepth(10).setAlpha(0);
+    this.cake = SG.Art.fit(this.add.image(tx, FLOOR - 10, 'cake')
+      .setOrigin(0.5, 1).setDepth(10).setAlpha(0), 'cake', 0.75);
     this.tweens.add({ targets: this.cake, alpha: 1, y: FLOOR - 10, duration: 500, delay: 900 });
 
     // Жена и дочка
-    this.wife = this.add.image(Math.round(W * 0.74), FLOOR, 'wife')
-      .setOrigin(0.5, 1).setScale(S).setDepth(11).setAlpha(0);
-    this.daughter = this.add.image(Math.round(W * 0.86), FLOOR, 'daughter')
-      .setOrigin(0.5, 1).setScale(S).setDepth(11).setAlpha(0);
+    this.wife = SG.Art.fit(this.add.image(Math.round(W * 0.74), FLOOR, 'wife')
+      .setOrigin(0.5, 1).setDepth(11).setAlpha(0), 'wife');
+    this.daughter = SG.Art.fit(this.add.image(Math.round(W * 0.86), FLOOR, 'daughter')
+      .setOrigin(0.5, 1).setDepth(11).setAlpha(0), 'daughter');
     this.tweens.add({ targets: [this.wife, this.daughter], alpha: 1, duration: 400, delay: 500 });
     this.tweens.add({ targets: this.daughter, y: FLOOR - 12, duration: 380, yoyo: true, repeat: -1,
       delay: 900, ease: 'Sine.easeInOut' });

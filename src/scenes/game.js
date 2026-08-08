@@ -72,10 +72,13 @@ SG.GameScene = new Phaser.Class({
     var W = this.W, H = this.H, G = this.G;
     this.zones = [];
     for (var i = 0; i < SG.CFG.zones.length; i++) {
+      // Высоту полосы задаёт сама текстура: тайлспрайт кладёт её пиксель
+      // в пиксель, поэтому высокому дому нужен и высокий слой. Рисованные
+      // фоны все 220, но подменить их можно картинкой любой высоты.
       var z = {
         sky:  this.add.image(0, 0, 'sky' + i).setOrigin(0).setDisplaySize(W, H).setDepth(0),
-        far:  this.add.tileSprite(0, G - 220, W, 220, 'bg' + i + '_far').setOrigin(0).setDepth(1),
-        near: this.add.tileSprite(0, G - 220, W, 220, 'bg' + i + '_near').setOrigin(0).setDepth(2),
+        far:  this.bgLayer('bg' + i + '_far', 1),
+        near: this.bgLayer('bg' + i + '_near', 2),
         gnd:  this.add.tileSprite(0, G, W, H - G, 'ground' + i).setOrigin(0).setDepth(3)
       };
       var a = i === 0 ? 1 : 0;
@@ -84,6 +87,13 @@ SG.GameScene = new Phaser.Class({
     }
     // тёмная виньетка снизу, чтобы персонажи читались
     this.add.rectangle(0, G, W, H - G, 0x171223, 0.18).setOrigin(0).setDepth(4);
+  },
+
+  /* Слой фона во всю ширину, высотой со свою текстуру, нижним краем на земле */
+  bgLayer: function (key, depth) {
+    var src = this.textures.get(key).getSourceImage();
+    var h = Math.min(this.G, (src && src.height) || 220);
+    return this.add.tileSprite(0, this.G - h, this.W, h, key).setOrigin(0).setDepth(depth);
   },
 
   buildHero: function () {
@@ -922,9 +932,11 @@ SG.GameScene = new Phaser.Class({
   buildGate: function (kind) {
     var key = 'gate_' + kind;
     var x = this.W + 150;
-    var restX = Math.round(this.W * (kind === 'porch' ? 0.86 : 0.72));
-
     var spr = SG.Art.fit(this.add.sprite(x, this.G, key).setOrigin(0.5, 1).setDepth(8), key);
+    // подъезд встаёт правее прочих выходов, но целиком в кадре: у босса
+    // перед ним ещё драка, обрезанная кулиса тут ни к чему
+    var restX = Math.min(Math.round(this.W * (kind === 'porch' ? 0.86 : 0.72)),
+                         Math.round(this.W - spr.displayWidth / 2 - 8));
     var g = { kind: kind, spr: spr, x: x, restX: restX, leaves: [], dx: [] };
 
     // Створки прижимаются к косякам: левая растёт вправо от левого косяка,

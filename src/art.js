@@ -17,7 +17,7 @@ SG.Art = (function () {
     hairS:  '#b98a4e', hairSL: '#dcae68', hairSD: '#8a6236',
     beard:  '#96693a', beardD: '#7a5430', lens: '#46648a',
     tee:    '#25222f', teeL:  '#3a3650',
-    jean:   '#3b5c9e', jeanD: '#2b4478',
+    jean:   '#3b5c9e', jeanD: '#2b4478', jeanL: '#5479c2',
     boot:   '#3c2f28',
     gtr:    '#e33d3d', gtrD:  '#a52a2a', gtrHi: '#ff8a76',
     neck:   '#8a5a34', fret:  '#3b2818', str:   '#efe9dd',
@@ -83,6 +83,68 @@ SG.Art = (function () {
       var rad = a * Math.PI / 180;
       px(g, cx + Math.cos(rad) * r, cy + Math.sin(rad) * r, t, t, col);
     }
+  }
+
+  /* Автоматическая светотень.
+   *
+   * Главное, что отличает 16-бит от 8-бит, — не количество пикселей, а объём.
+   * Проходим по спрайту и подсвечиваем края, обращённые к свету (вверх-влево),
+   * притемняя противоположные. Плоские заливки сразу перестают быть плоскими. */
+  function volume(o, opts) {
+    opts = opts || {};
+    var g = o.g, w = o.w, h = o.h;
+    var img = g.getImageData(0, 0, w, h);
+    var d = img.data;
+    var src = new Uint8ClampedArray(d);
+    var lit = opts.light === undefined ? 0.30 : opts.light;
+    var dark = opts.dark === undefined ? 0.26 : opts.dark;
+
+    function solid(x, y) {
+      if (x < 0 || y < 0 || x >= w || y >= h) return false;
+      return src[(y * w + x) * 4 + 3] > 8;
+    }
+
+    for (var y = 0; y < h; y++) {
+      for (var x = 0; x < w; x++) {
+        if (!solid(x, y)) continue;
+        var k = 0;
+        if (!solid(x, y - 1) || !solid(x - 1, y)) k = lit;
+        else if (!solid(x, y + 1) || !solid(x + 1, y)) k = -dark;
+        if (!k) continue;
+        var i = (y * w + x) * 4;
+        for (var c = 0; c < 3; c++) {
+          var v = src[i + c];
+          d[i + c] = k > 0 ? v + (255 - v) * k : v * (1 + k);
+        }
+      }
+    }
+    g.putImageData(img, 0, 0);
+    return o;
+  }
+
+  /* Тёплая контровая подсветка справа — «закатное» солнце сцены */
+  function rim(o, col, alpha) {
+    var g = o.g, w = o.w, h = o.h;
+    var img = g.getImageData(0, 0, w, h);
+    var d = img.data;
+    var src = new Uint8ClampedArray(d);
+    var rgb = [parseInt(col.substr(1, 2), 16), parseInt(col.substr(3, 2), 16),
+               parseInt(col.substr(5, 2), 16)];
+    var a = alpha === undefined ? 0.5 : alpha;
+
+    function solid(x, y) {
+      if (x < 0 || y < 0 || x >= w || y >= h) return false;
+      return src[(y * w + x) * 4 + 3] > 8;
+    }
+    for (var y = 0; y < h; y++) {
+      for (var x = 0; x < w; x++) {
+        if (!solid(x, y) || solid(x + 1, y)) continue;
+        var i = (y * w + x) * 4;
+        for (var c = 0; c < 3; c++) d[i + c] = src[i + c] * (1 - a) + rgb[c] * a;
+      }
+    }
+    g.putImageData(img, 0, 0);
+    return o;
   }
 
   /* Обводка непрозрачных пикселей — придаёт спрайтам «мультяшность» */
@@ -224,8 +286,211 @@ SG.Art = (function () {
     return outline(o, P.out);
   }
 
+  /* =====================================================================
+   *  СЕРЁГА В ВЫСОКОМ РАЗРЕШЕНИИ (64x68)
+   *
+   *  Тот же силуэт, но вчетверо больше пикселей: детальная гитара,
+   *  оправа очков с бликом, складки на футболке, объём и контровой свет.
+   *  Мир и хитбоксы не меняются — спрайт просто рисуется в масштабе 1:1.
+   * ===================================================================== */
+
+  function legs2(g, pose) {
+    function leg(x, y, h, bx, by) {
+      x *= 2; y *= 2; h *= 2; bx *= 2; by *= 2;
+      px(g, x, y, 8, h, P.jean);
+      px(g, x, y, 2, h, P.jeanD);
+      px(g, x + 6, y, 2, h, P.jeanL);
+      px(g, x, y + Math.floor(h * 0.5), 8, 1, P.jeanD);     // складка под коленом
+      px(g, x + 1, y + Math.floor(h * 0.75), 6, 1, P.jeanD);
+      px(g, bx, by, 12, 4, P.boot);                          // ботинок
+      px(g, bx, by + 4, 12, 2, '#241c18');                   // подошва
+      px(g, bx + 2, by + 1, 6, 1, '#54423a');                // блик на носке
+    }
+    if (pose === 0)      { leg(16, 25, 5, 16, 30); leg(10, 25, 4, 8, 29); }
+    else if (pose === 1) { leg(14, 25, 6, 14, 31); leg(11, 25, 5, 10, 30); }
+    else if (pose === 2) { leg(11, 25, 5, 9, 30);  leg(16, 25, 4, 17, 29); }
+    else if (pose === 3) { leg(13, 25, 6, 13, 31); leg(15, 25, 4, 15, 29); }
+    else if (pose === 4) {                                    // прыжок: колени поджаты
+      px(g, 30, 48, 10, 8, P.jean);  px(g, 30, 48, 2, 8, P.jeanD);
+      px(g, 36, 52, 10, 6, P.jean);
+      px(g, 42, 54, 12, 4, P.boot);  px(g, 42, 58, 12, 2, '#241c18');
+      px(g, 20, 50, 8, 10, P.jean);  px(g, 20, 50, 2, 10, P.jeanD);
+      px(g, 16, 56, 12, 4, P.boot);  px(g, 16, 60, 12, 2, '#241c18');
+    } else               { leg(15, 25, 6, 15, 31); leg(11, 25, 6, 11, 31); }
+  }
+
+  /* Голова: эллипс, сужающийся к подбородку — прямоугольник при такой
+   * плотности пикселей читается как кирпич */
+  function headShape(g, cx, cy, rx, ry, col) {
+    for (var y = -ry; y <= ry; y++) {
+      var k = y / ry;
+      var w = rx * Math.sqrt(Math.max(0, 1 - k * k));
+      if (y > 0) w *= 1 - 0.28 * k;
+      w = Math.floor(w);
+      if (w > 0) px(g, cx - w, cy + y, w * 2, 1, col);
+    }
+  }
+
+  function guitar2(g, lift) {
+    var bx = 24, by = 48;                                    // центр корпуса
+    var tipX = 55, tipY = 30 - Math.round(lift * 13);
+
+    // гриф с накладкой и ладами
+    var nx = bx + 7, ny = by - 3;
+    line(g, nx, ny, tipX, tipY, 5, P.neck);
+    line(g, nx, ny, tipX, tipY, 3, P.fret);
+    for (var f = 1; f < 8; f++) {
+      var t = f / 8;
+      var fx = Math.round(nx + (tipX - nx) * t);
+      var fy = Math.round(ny + (tipY - ny) * t);
+      px(g, fx, fy, 1, 3, '#8f7a5c');                        // порожки
+      if (f === 3 || f === 5) px(g, fx, fy + 1, 1, 1, P.str);  // точки-ориентиры
+    }
+    // голова грифа и колки
+    px(g, tipX - 1, tipY - 3, 8, 8, P.woodD);
+    for (var k = 0; k < 3; k++) {
+      px(g, tipX + k * 2, tipY - 5, 1, 2, P.gold);
+      px(g, tipX + k * 2, tipY + 5, 1, 2, P.gold);
+    }
+
+    // корпус
+    ellipse(g, bx, by, 10, 8, P.gtr);
+    ellipse(g, bx + 6, by - 4, 6, 5, P.gtr);                 // верхний рог
+    ellipse(g, bx - 6, by + 1, 7, 7, P.gtr);
+    ellipse(g, bx - 5, by + 3, 5, 5, P.gtrD);                // тень снизу
+    ellipse(g, bx - 3, by - 4, 5, 3, P.gtrHi);               // блик лака
+    px(g, bx - 5, by - 6, 4, 1, '#ffd6cc');                  // резкий отсвет
+
+    // пикгард, звукосниматели, бридж, ручки
+    rows(g, [[by - 3, bx - 7, 11], [by - 1, bx - 8, 13],
+             [by + 1, bx - 8, 13], [by + 3, bx - 7, 11]], '#f0ece2');
+    px(g, bx - 2, by - 4, 8, 3, '#2b2740');                  // хамбакер у грифа
+    px(g, bx - 2, by + 1, 8, 3, '#2b2740');                  // хамбакер у бриджа
+    for (var pp = 0; pp < 3; pp++) {
+      px(g, bx - 1 + pp * 3, by - 3, 1, 1, P.greyL);
+      px(g, bx - 1 + pp * 3, by + 2, 1, 1, P.greyL);
+    }
+    px(g, bx + 6, by - 1, 3, 5, P.greyD);                    // бридж
+    px(g, bx - 6, by + 6, 2, 2, P.greyL);                    // ручки громкости
+    px(g, bx - 2, by + 7, 2, 2, P.greyL);
+
+    // струны
+    for (var s = 0; s < 3; s++) {
+      line(g, bx + 8, by - 3 + s, tipX + 1, tipY - 1 + s, 1, P.str);
+    }
+  }
+
+  function hero2(pose, opt) {
+    opt = opt || {};
+    var o = cv(64, 68), g = o.g;
+    var lift = opt.lift || 0;
+    var Y = (pose === 1 || pose === 3) ? 2 : 0;
+
+    /* строки со смещением на «покачивание» при беге */
+    function R(list, col) {
+      for (var i = 0; i < list.length; i++) {
+        px(g, list[i][1], list[i][0] + Y, list[i][2], 1, col);
+      }
+    }
+    function B(x, y, w, h, col) { px(g, x, y + Y, w, h, col); }
+
+    // задняя рука
+    B(17, 30, 7, 15, P.tee);
+
+    legs2(g, pose === 'air' ? 4 : pose);
+
+    // корпус: плечи шире, талия уже
+    R([[26, 21, 23], [27, 20, 25], [28, 20, 25], [29, 20, 25], [30, 20, 25],
+       [31, 20, 25], [32, 20, 25], [33, 20, 25], [34, 20, 25], [35, 21, 23],
+       [36, 21, 23], [37, 21, 23], [38, 21, 23], [39, 22, 21], [40, 22, 21],
+       [41, 22, 21], [42, 22, 21], [43, 23, 19], [44, 23, 19], [45, 23, 19]], P.tee);
+    B(23, 38, 12, 1, '#1b1926');                             // складки ткани
+    B(25, 42, 13, 1, '#1b1926');
+    B(21, 30, 3, 6, P.teeL);
+    // ремень гитары — уводим левее принта, чтобы не перечёркивал череп
+    line(g, 22, 26 + Y, 27, 46 + Y, 4, P.woodD);
+    line(g, 23, 26 + Y, 28, 46 + Y, 1, '#9a6a40');
+    // ремень
+    R([[46, 23, 19], [47, 23, 19], [48, 23, 19], [49, 23, 19]], P.hairD);
+    B(23, 46, 19, 1, '#5c4433');
+    B(30, 46, 6, 4, P.gold);
+    B(31, 47, 4, 2, P.goldD);
+
+    // принт-череп
+    R([[29, 29, 8], [30, 28, 10], [31, 28, 10], [32, 28, 10],
+       [33, 28, 10], [34, 29, 8], [36, 30, 6], [37, 30, 6]], P.str);
+    B(30, 30, 3, 3, P.out);                                  // глазницы
+    B(34, 30, 3, 3, P.out);
+    B(32, 33, 2, 2, P.out);                                  // нос черепа
+    B(32, 36, 1, 2, P.out);                                  // зубы
+    B(34, 36, 1, 2, P.out);
+
+    // шея
+    B(29, 21, 8, 6, P.skinD);
+
+    // голова: тёмный контур-подложка, светлая маска сверху
+    headShape(g, 32, 14 + Y, 9, 10, P.skinD);
+    headShape(g, 33, 14 + Y, 8, 9, P.skin);
+    B(37, 11, 3, 8, '#ffd2a8');                              // засвеченная щека
+
+    // волосы: шапка по черепу, кок сметён вверх-вправо, бока короткие
+    R([[2, 28, 10], [3, 26, 14], [4, 25, 16], [5, 24, 18],
+       [6, 23, 19], [7, 23, 19]], P.hairS);
+    R([[0, 33, 9], [1, 31, 12]], P.hairS);                   // кок
+    R([[0, 35, 6], [1, 34, 7]], P.hairSL);                   // блик на коке
+    R([[8, 23, 5], [9, 23, 4], [10, 23, 4], [11, 23, 3], [12, 24, 3]], P.hairSD);
+    R([[8, 38, 4], [9, 39, 3], [10, 39, 3]], P.hairSD);
+    line(g, 29, 6 + Y, 36, 1 + Y, 1, P.hairSL);              // одна прядь по зачёсу
+
+    // уши
+    B(22, 15, 3, 5, P.skinD);
+    B(40, 15, 3, 5, P.skinD);
+
+    // очки
+    B(21, 15, 5, 2, P.out);                                  // заушник
+    B(25, 12, 8, 7, P.out);                                  // левая оправа
+    B(35, 12, 8, 7, P.out);                                  // правая оправа
+    B(33, 13, 2, 2, P.out);                                  // переносица
+    B(26, 13, 6, 5, P.lens);
+    B(36, 13, 6, 5, P.lens);
+    line(g, 37, 17 + Y, 41, 13 + Y, 1, '#cfe6ff');           // блик
+    line(g, 27, 17 + Y, 30, 14 + Y, 1, '#9dbde0');
+    B(39, 15, 2, 2, '#22304a');                              // зрачок
+
+    // нос
+    B(32, 17, 3, 2, P.skinD);
+    B(33, 17, 1, 1, '#ffd2a8');
+
+    // усы, рот, бородка клинышком (щёки почти выбриты — как на фото)
+    B(26, 17, 2, 6, P.beard);                                // тонкая связка от бакенбарда
+    B(38, 17, 2, 6, P.beard);
+    R([[19, 29, 8], [20, 28, 10]], P.beard);                 // усы
+    B(31, 21, 5, 2, '#6b3236');                              // рот
+    R([[22, 29, 8], [23, 28, 10], [24, 28, 10],
+       [25, 29, 8], [26, 30, 6], [27, 31, 4]], P.beard);
+    R([[22, 29, 8]], P.beardD);
+    for (var bs = 0; bs < 4; bs++) B(29 + bs * 2, 23, 1, 3, '#b0834c');
+
+    guitar2(g, lift);
+
+    // передняя рука
+    if (lift > 0.5) {
+      B(42, 26, 8, 8, P.tee);
+      B(46, 19, 7, 9, P.skin);
+      B(46, 19, 2, 9, P.skinD);
+    } else {
+      B(42, 28, 7, 10, P.tee);
+      B(44, 37, 7, 8, P.skin);
+      B(44, 37, 2, 8, P.skinD);
+    }
+
+    volume(o, { light: 0.26, dark: 0.24 });
+    rim(o, '#ffbe7a', 0.4);
+    return outline(o, P.out);
+  }
+
   function heroHurt() {
-    var o = hero(5, {});
+    var o = hero2(5, {});
     var g = o.g;
     g.globalCompositeOperation = 'source-atop';
     px(g, 0, 0, o.w, o.h, 'rgba(255,90,90,0.55)');
@@ -888,14 +1153,14 @@ SG.Art = (function () {
    * ===================================================================== */
 
   var BUILDERS = {
-    hero_run0:   function () { return hero(0); },
-    hero_run1:   function () { return hero(1); },
-    hero_run2:   function () { return hero(2); },
-    hero_run3:   function () { return hero(3); },
-    hero_air:    function () { return hero('air'); },
-    hero_idle:   function () { return hero(5); },
-    hero_atk0:   function () { return hero(5, { lift: 1 }); },
-    hero_atk1:   function () { return hero(4, { lift: 0.4 }); },
+    hero_run0:   function () { return hero2(0); },
+    hero_run1:   function () { return hero2(1); },
+    hero_run2:   function () { return hero2(2); },
+    hero_run3:   function () { return hero2(3); },
+    hero_air:    function () { return hero2('air'); },
+    hero_idle:   function () { return hero2(5); },
+    hero_atk0:   function () { return hero2(5, { lift: 1 }); },
+    hero_atk1:   function () { return hero2(4, { lift: 0.4 }); },
     hero_hurt:   heroHurt,
 
     zombie0:     function () { return zombie(0); },
@@ -953,9 +1218,20 @@ SG.Art = (function () {
     ground3:     function () { return groundTex(3); }
   };
 
+  /* Спрайты, нарисованные в новом разрешении: их выводим 1:1,
+   * остальные пока растягиваем вдвое. Так можно мигрировать по одному. */
+  var HI = {
+    hero_run0: 1, hero_run1: 1, hero_run2: 1, hero_run3: 1,
+    hero_air: 1, hero_idle: 1, hero_atk0: 1, hero_atk1: 1, hero_hurt: 1
+  };
+
   return {
     P: P,
+    HI: HI,
     KEYS: Object.keys(BUILDERS),
+
+    /* Во сколько раз растягивать спрайт при выводе */
+    scaleFor: function (key) { return HI[key] ? 1 : SG.VIEW.SCALE; },
 
     /* Рисует всё, чего ещё нет в кэше текстур (загруженные PNG не трогает) */
     build: function (scene) {

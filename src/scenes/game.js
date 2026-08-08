@@ -83,7 +83,7 @@ SG.GameScene = new Phaser.Class({
       runT: 0
     };
     this.heroSpr = this.add.sprite(this.heroX, G, 'hero_run0')
-      .setOrigin(0.5, 1).setScale(this.S).setDepth(12);
+      .setOrigin(0.5, 1).setScale(SG.Art.scaleFor('hero_run0')).setDepth(12);
     this.heroShadow = this.add.ellipse(this.heroX, G + 2, 44, 10, 0x171223, 0.35).setDepth(11);
   },
 

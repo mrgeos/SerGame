@@ -14,7 +14,8 @@ SG.VictoryScene = new Phaser.Class({
     this.buildRoom(W, H, FLOOR);
 
     // Серёга вбегает слева
-    this.hero = this.add.sprite(-50, FLOOR, 'hero_run0').setOrigin(0.5, 1).setScale(S).setDepth(12);
+    this.hero = this.add.sprite(-50, FLOOR, 'hero_run0')
+      .setOrigin(0.5, 1).setScale(SG.Art.scaleFor('hero_run0')).setDepth(12);
     this.runT = 0; this.running = true;
     this.tweens.add({
       targets: this.hero, x: Math.round(W * 0.34), duration: 1500, ease: 'Sine.easeOut',

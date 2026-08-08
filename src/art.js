@@ -1252,6 +1252,17 @@ SG.Art = (function () {
 
     zombie0:     function () { return zombie(0); },
     zombie1:     function () { return zombie(1); },
+    // Запасной код-арт для четырёх кадров и удара: рисованных поз всего две,
+    // поэтому 2/3 повторяют 0/1, а удар — вспышка поверх.
+    zombie2:     function () { return zombie(0); },
+    zombie3:     function () { return zombie(1); },
+    zombie_hit:  function () {
+      var o = zombie(1), g = o.g;
+      g.globalCompositeOperation = 'source-atop';
+      px(g, 0, 0, o.w, o.h, 'rgba(255,255,255,0.65)');
+      g.globalCompositeOperation = 'source-over';
+      return o;
+    },
 
     boss_idle:   function () { return boss('idle'); },
     boss_windup: function () { return boss('windup'); },

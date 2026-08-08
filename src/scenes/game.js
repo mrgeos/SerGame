@@ -375,13 +375,20 @@ SG.GameScene = new Phaser.Class({
         e.obj.y = e.cy;
         e.obj.rotation = Math.sin(e.t * 2) * 0.25;
       } else if (e.kind === 'zombie') {
-        e.obj.setTexture(Math.floor(e.t * 6) % 2 ? 'zombie1' : 'zombie0');
+        if (!e.dying) e.obj.setTexture('zombie' + (Math.floor(e.t * 8) % 4));
         if (e.say) { e.say.x = e.x; }
       } else if (e.kind === 'shot') {
         e.obj.rotation += dt * 6 * (e.spin || 1);
       }
 
       if (e.x < -140) { this.killEnt(e, i, false); continue; }
+
+      // сбитый зомби ещё мгновение летит, потом исчезает
+      if (e.dying) {
+        e.obj.setAlpha(Math.max(0, (e.dieAt - now) / 300));
+        if (now >= e.dieAt) this.killEnt(e, i, true);
+        continue;
+      }
 
       // удар аккордом
       if ((atk || shred) && e.smashable !== false && e.kind !== 'pickup') {
@@ -435,6 +442,16 @@ SG.GameScene = new Phaser.Class({
     this.burst(e.x, e.cy, e.kind === 'zombie' ? 'fx_spark' : 'fx_sparkc', 8);
     this.floatText(e.x, e.cy - 30, SG.CFG.chords[Math.floor(Math.random() * SG.CFG.chords.length)], '#7de8ff');
     this.cameras.main.shake(90, 0.004);
+
+    // зомби не исчезает мгновенно: показываем кадр удара и отбрасываем
+    if (e.kind === 'zombie') {
+      e.dying = true;
+      e.dieAt = this.time.now + 300;
+      e.vx = 220;
+      e.obj.setTexture('zombie_hit');
+      if (e.say) { e.say.destroy(); e.say = null; }
+      return;
+    }
     this.killEnt(e, idx, false);
   },
 
@@ -691,7 +708,7 @@ SG.GameScene = new Phaser.Class({
     this.hero.invulnUntil = 0;                 // мигание больше не нужно
 
     // шапка едет на голове, пропеллер крутится отдельно
-    this.hatSpr = this.add.image(this.heroX - 1, this.hero.y - 54, 'hat_worn')
+    this.hatSpr = this.add.image(this.heroX - 1, this.hero.y - this.heroHatOffset(), 'hat_worn')
       .setOrigin(0.5, 1).setDepth(13);
     SG.Art.fit(this.hatSpr, 'hat_worn');
     // пропеллер держим над куполом, а не поверх него
@@ -719,9 +736,15 @@ SG.GameScene = new Phaser.Class({
     this.floatText(this.heroX, this.G - 130, SG.CFG.geos.hatOff, '#c9c3dd');
   },
 
+  /* Куда сажать шапку: считаем от высоты спрайта героя, потому что
+   * у кода-арта и у сгенерированных кадров голова на разной высоте */
+  heroHatOffset: function () {
+    return this.heroSpr.displayHeight * 0.72;
+  },
+
   updateHat: function (dt) {
     if (!this.gift.hatOn || !this.hatSpr) return;
-    this.hatSpr.y = this.hero.y - 54;
+    this.hatSpr.y = this.hero.y - this.heroHatOffset();
     this.hatProp.y = this.hatSpr.y - this.hatSpr.displayHeight + 8;
     this.hatProp.rotation += dt * 26;
 

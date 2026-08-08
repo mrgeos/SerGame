@@ -935,7 +935,7 @@ SG.GameScene = new Phaser.Class({
     var spr = SG.Art.fit(this.add.sprite(x, this.G, key).setOrigin(0.5, 1).setDepth(8), key);
     // подъезд встаёт правее прочих выходов, но целиком в кадре: у босса
     // перед ним ещё драка, обрезанная кулиса тут ни к чему
-    var restX = Math.min(Math.round(this.W * (kind === 'porch' ? 0.86 : 0.72)),
+    var restX = Math.min(Math.round(this.W * (kind === 'porch' ? 0.80 : 0.72)),
                          Math.round(this.W - spr.displayWidth / 2 - 8));
     var g = { kind: kind, spr: spr, x: x, restX: restX, leaves: [], dx: [] };
 

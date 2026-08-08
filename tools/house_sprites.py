@@ -27,10 +27,17 @@ STYLE = sys.argv[2] if len(sys.argv) > 2 else 'pixel'    # pixel | smooth
 
 # --- найденное разметкой ---------------------------------------------------
 DOOR = (885, 1134, 1009, 1291)          # дверь: x0, y0, x1, y1
-PORCH_TOP = 986                         # докуда вверх берём портал с козырьком
+PORCH_TOP = 746                         # докуда вверх берём дом: подъезд плюс этажи
 DOOR_RATIO = 36 / 102                   # доля проёма в ширине спрайта (код-арт)
-FACADE = (341, 20, 889, 1048)           # фасад для фона: стык подобран по краям
-BG_W, BG_H = 160, 300                   # тайл: панельке повторяться не грех
+
+# Двор — три одинаковые башни: синяя, зелёная и оранжевая (Серёгина).
+# Тайлом повторяется вся тройка, поэтому дом Серёги в фоне встречается
+# ровно один раз на оборот, а не мельтешит.
+FACADE = (341, 20, 691, 1070)           # один корпус: узкий и высокий
+TOWER_W, TOWER_H = 84, 272              # башня на экране: узкая и высокая
+GAP = 28                                # просвет между башнями
+BG_H = 300                              # вся полоса; над крышами — небо
+TOWER_HUES = (212, 118, None)           # синий, зелёный, оранжевый как есть
 
 im = Image.open(SRC).convert('RGB')
 
@@ -90,41 +97,52 @@ leaf = im.crop((dx0, dy0, dx0 + door_w // 2, dy1))
 leaf_w = 18 if STYLE == 'pixel' else round(18 * 2.3 * 2)
 styled(leaf, leaf_w).save(f'{OUT}/gate_porch_leaf.png')
 
-# --- 3. Фон двора ----------------------------------------------------------
-# Тайлится по горизонтали, поэтому края сводим кросс-фейдом. Верх растворяем
-# в прозрачность: дом выше полосы, и обрывать его ровной линией по небу нельзя.
-# Заодно притемняем — дальний план не должен спорить с героем.
+# --- 3. Двор: три башни ----------------------------------------------------
+# Корпуса одинаковые, отличаются только цветом простенков. Красим поворотом
+# тона: белые панели и стёкла почти не насыщены и остаются на месте, уходит
+# только оранжевый. Между башнями просвет, над крышами прозрачно — иначе
+# ряд читается сплошной стеной, а не тремя домами.
+import colorsys
+
 fx0, fy0, fx1, fy1 = FACADE
-facade = im.crop((fx0, fy0, fx1, fy1))
+body = im.crop((fx0, fy0, fx1, fy1))
 if STYLE == 'pixel':
-    bg = posterize(facade.resize((BG_W // 2, BG_H // 2), Image.LANCZOS))
-    bg = bg.resize((BG_W, BG_H), Image.NEAREST)
+    body = posterize(body.resize((TOWER_W // 2, TOWER_H // 2), Image.LANCZOS))
+    body = body.resize((TOWER_W, TOWER_H), Image.NEAREST)
 else:
-    bg = facade.resize((BG_W, BG_H), Image.LANCZOS)
+    body = body.resize((TOWER_W, TOWER_H), Image.LANCZOS)
 
-bg = bg.convert('RGBA')
-bp = bg.load()
-NIGHT = (58, 48, 86)                          # к чему уводим — вечерний воздух
-for y in range(BG_H):
-    for x in range(BG_W):
-        r, g, b, a = bp[x, y]
-        bp[x, y] = (round(r * .72 + NIGHT[0] * .28),
-                    round(g * .72 + NIGHT[1] * .28),
-                    round(b * .72 + NIGHT[2] * .28), a)
+NIGHT = (58, 48, 86)                          # вечерний воздух, к нему уводим
 
-BLEND = 10
-for x in range(BLEND):                        # шов между левым и правым краем
-    k = 0.5 * (1 - x / BLEND)
-    for y in range(BG_H):
-        a = bp[x, y]
-        b = bp[BG_W - BLEND + x, y]
-        bp[x, y] = tuple(round(a[i] * (1 - k) + b[i] * k) for i in range(3)) + (a[3],)
 
-FADE = 84
-for y in range(FADE):                         # верх уходит в небо
-    al = round(255 * (y / FADE) ** 1.4)
-    for x in range(BG_W):
-        bp[x, y] = bp[x, y][:3] + (al,)
+def tower(hue):
+    t = body.copy().convert('RGBA')
+    tp = t.load()
+    for y in range(TOWER_H):
+        for x in range(TOWER_W):
+            r, g, b, a = tp[x, y]
+            if hue is not None:
+                hh, ss, vv = colorsys.rgb_to_hsv(r / 255, g / 255, b / 255)
+                # перекрашиваем только тёплые насыщенные пятна — простенки
+                if ss > 0.22 and (hh < 0.11 or hh > 0.94):
+                    # чуть глушим насыщенность: три ярких корпуса рядом
+                    # начинают рябить и спорят с героем
+                    r, g, b = [round(c * 255) for c in
+                               colorsys.hsv_to_rgb(hue / 360, ss * 0.72, vv)]
+            tp[x, y] = (round(r * .72 + NIGHT[0] * .28),
+                        round(g * .72 + NIGHT[1] * .28),
+                        round(b * .72 + NIGHT[2] * .28), a)
+    # крыша: тёмный парапет, иначе корпус обрывается срезом
+    d = Image.new('RGBA', (TOWER_W, 5), (38, 33, 56, 255))
+    t.paste(d, (0, 0))
+    t.paste(Image.new('RGBA', (TOWER_W, 2), (78, 70, 104, 255)), (0, 0))
+    return t
+
+bg_w = (TOWER_W + GAP) * len(TOWER_HUES)
+bg = Image.new('RGBA', (bg_w, BG_H), (0, 0, 0, 0))
+for i, hue in enumerate(TOWER_HUES):
+    bg.paste(tower(hue), (GAP // 2 + i * (TOWER_W + GAP), BG_H - TOWER_H))
 bg.save(f'{OUT}/bg2_far.png')
 
-print(f'{STYLE}: подъезд {porch.size} -> {porch_w}px, створка {leaf.size}, фон {BG_W}x{BG_H}')
+print(f'{STYLE}: подъезд {porch.size} -> {porch_w}px, '
+      f'створка {leaf.size}, двор {bg_w}x{BG_H} (три башни)')

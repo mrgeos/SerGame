@@ -34,7 +34,7 @@ SG.VictoryScene = new Phaser.Class({
     this.add.rectangle(tx - 48, FLOOR + 0, 10, 46, 0x553719).setOrigin(0.5, 0).setDepth(8);
     this.add.rectangle(tx + 48, FLOOR + 0, 10, 46, 0x553719).setOrigin(0.5, 0).setDepth(8);
     this.cake = SG.Art.fit(this.add.image(tx, FLOOR - 10, 'cake')
-      .setOrigin(0.5, 1).setDepth(10).setAlpha(0), 'cake', 0.75);
+      .setOrigin(0.5, 1).setDepth(10).setAlpha(0), 'cake', 0.45);
     this.tweens.add({ targets: this.cake, alpha: 1, y: FLOOR - 10, duration: 500, delay: 900 });
 
     // Жена и дочка

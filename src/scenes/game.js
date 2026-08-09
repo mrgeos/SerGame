@@ -360,11 +360,46 @@ SG.GameScene = new Phaser.Class({
     var spr = SG.Art.fit(this.add.sprite(x, G, 'zombie0').setOrigin(0.5, 1).setDepth(10), 'zombie0');
     var e = this.addEnt({ kind: 'zombie', obj: spr, x: x, cy: G - 34, hw: 20, hh: 30, vx: -95, smashable: true, t: 0 });
     if (Math.random() < 0.5) {
-      var say = SG.txt(this, x, G - 82, SG.CFG.taunts[Math.floor(Math.random() * SG.CFG.taunts.length)],
-        11, '#c8f0a0', { strokeThickness: 3 }).setDepth(11);
-      e.say = say;
+      var T = SG.CFG.taunts;
+      e.say = this.bubble(x, G - 88, T[Math.floor(Math.random() * T.length)]).setDepth(11);
     }
     return e;
+  },
+
+  /* Реплика в светлой плашке.
+   *
+   * Тёмным по светлому читается заметно быстрее, чем светлым с обводкой
+   * по пёстрому фону, — а реплика зомби живёт на экране пару секунд, и её
+   * надо успеть прочитать. tailDx — куда смотрит хвостик снизу. */
+  bubble: function (x, y, text, tailDx) {
+    var t = SG.txt(this, 0, 0, text, 12, '#171223',
+      { originX: 0.5, originY: 0.5, strokeThickness: 0 });
+    var w = t.width + 20, h = t.height + 12;
+    var tx = tailDx === undefined ? 0 : tailDx;
+
+    var g = this.add.graphics();
+    g.fillStyle(0xf2e9d8, 1);
+    g.fillRoundedRect(-w / 2, -h / 2, w, h, 7);
+    g.fillTriangle(tx - 6, h / 2 - 1, tx + 6, h / 2 - 1, tx - 2, h / 2 + 9);
+    g.lineStyle(1, 0x171223, 0.4);
+    g.strokeRoundedRect(-w / 2, -h / 2, w, h, 7);
+
+    var box = this.add.container(x, y).setScale(0.7).setAlpha(0);
+    box.add([g, t]);
+    this.tweens.add({ targets: box, scale: 1, alpha: 1, duration: 160, ease: 'Back.easeOut' });
+    return box;
+  },
+
+  /* Реплика не исчезает вместе с зомби: повисает в воздухе и тает,
+   * иначе аккорд стирает её раньше, чем её успевают дочитать. */
+  dropBubble: function (e) {
+    if (!e.say) return;
+    var b = e.say;
+    e.say = null;
+    this.tweens.add({
+      targets: b, y: b.y - 16, alpha: 0, duration: SG.CFG.run.tauntFadeMs,
+      delay: 260, onComplete: function () { b.destroy(); }
+    });
   },
 
   spawnPickup: function (kind) {
@@ -547,7 +582,7 @@ SG.GameScene = new Phaser.Class({
       e.dieAt = this.time.now + 300;
       e.vx = 220;
       e.obj.setTexture('zombie_hit');
-      if (e.say) { e.say.destroy(); e.say = null; }
+      this.dropBubble(e);
       return;
     }
     this.killEnt(e, idx, false);
@@ -868,24 +903,10 @@ SG.GameScene = new Phaser.Class({
     });
   },
 
-  /* Реплика героя в пузыре */
+  /* Реплика героя — та же плашка, только хвостик смотрит вниз-влево, на него */
   say: function (text, ms) {
-    var x = this.heroX + 30, y = this.hero.y - 104;
-    var t = SG.txt(this, 0, 0, text, 14, '#171223',
-      { originX: 0.5, originY: 0.5, strokeThickness: 0 });
-    var w = t.width + 22, h = t.height + 16;
-
-    var g = this.add.graphics();
-    g.fillStyle(0xf2e9d8, 1);
-    g.fillRoundedRect(-w / 2, -h / 2, w, h, 8);
-    g.fillTriangle(-10, h / 2 - 1, 2, h / 2 - 1, -12, h / 2 + 12);
-
-    var box = this.add.container(x, y).setDepth(34).setScale(0.5).setAlpha(0);
-    box.add([g, t]);
-    this.tweens.add({ targets: box, scale: 1, alpha: 1, duration: 200, ease: 'Back.easeOut' });
-    this.time.delayedCall(ms || 1500, function () {
-      box.destroy();
-    });
+    var box = this.bubble(this.heroX + 30, this.hero.y - 104, text, -14).setDepth(34);
+    this.time.delayedCall(ms || 1500, function () { box.destroy(); });
     return box;
   },
 

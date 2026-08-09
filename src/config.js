@@ -100,6 +100,7 @@ SG.CFG = {
     accelPerMeter: 0.55,  // насколько разгоняется за «метр»
     lives: 3,
     invulnMs: 1300,       // неуязвимость после урона
+    tauntFadeMs: 1100,    // сколько реплика зомби висит после его смерти
     jumpVel: -620,
     gravity: 1750,
     doubleJumpVel: -520,

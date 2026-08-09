@@ -158,7 +158,7 @@ SG.GameScene = new Phaser.Class({
   /* Во время кат-сцен управление глухое: и у подгонов Геоса,
    * и на выходе с уровня спрайтом героя двигает сцена. */
   locked: function () {
-    return this.phase === 'dead' || this.phase === 'outro' ||
+    return this.paused || this.phase === 'dead' || this.phase === 'outro' ||
            this.cinematic || this.heroFrozen ||
            (this.phase === 'gate' && this.gateStep !== 'approach');
   },
@@ -684,33 +684,72 @@ SG.GameScene = new Phaser.Class({
    *  прилетает дракон и заканчивает разговор.
    * ===================================================================== */
 
-  /* Уведомление в духе мессенджера, выезжает сверху */
-  geosMessage: function (text, holdMs) {
-    var W = this.W;
-    var w = Math.min(W - 48, 470);
-    var msg = SG.txt(this, 0, 0, text, 13, '#f2e9d8',
-      { originX: 0, originY: 0, strokeThickness: 3, align: 'left', wrap: w - 78 });
-    var h = Math.max(56, msg.height + 34);
+  /* Остановить мир: забег замирает, отложенные вызовы тоже.
+   *
+   * Часы Phaser при этом продолжают идти — time.paused глушит только
+   * таймеры, но не time.now. Поэтому абсолютные метки (неуязвимость,
+   * «шред», страховочные сроки подгонов) при снятии паузы сдвигаются
+   * на её длительность: иначе они тихо истекут, пока игрок читает. */
+  pauseWorld: function () {
+    if (this.paused) return;
+    this.paused = true;
+    this.pausedAt = this.time.now;
+    this.time.paused = true;
+  },
+
+  resumeWorld: function () {
+    if (!this.paused) return;
+    var dt = this.time.now - this.pausedAt;
+    this.paused = false;
+    this.time.paused = false;
+
+    var h = this.hero;
+    h.invulnUntil += dt; h.attackUntil += dt; h.cdUntil += dt; h.hurtUntil += dt;
+    this.shredUntil += dt;
+    if (this.hatDeadline) this.hatDeadline += dt;
+    if (this.dragonDeadline) this.dragonDeadline += dt;
+  },
+
+  /* Сообщение от Геоса: окно по центру поверх игры.
+   *
+   * Подгон — переломный момент забега, и текст должны успеть прочитать,
+   * поэтому мир на это время встаёт, а дальше игра идёт только по кнопке.
+   * Всё, что подгон запускает, вешается на onAccept: пока окно открыто,
+   * ни шапка, ни дракон появиться не должны. */
+  geosMessage: function (text, onAccept) {
+    var self = this, C = SG.CFG, W = this.W, H = this.H;
+    this.pauseWorld();
+
+    var veil = this.add.rectangle(0, 0, W, H, 0x0d0a16, 0.62)
+      .setOrigin(0).setDepth(40).setAlpha(0);
+
+    var w = Math.min(W - 56, 430);
+    var msg = SG.txt(this, 0, 0, text, 14, '#f2e9d8',
+      { originX: 0, originY: 0, strokeThickness: 0, align: 'left', wrap: w - 86 });
+    var h = Math.max(44, msg.height) + 104;      // шапка с именем + кнопка
 
     var card = this.add.graphics();
-    card.fillStyle(0x171223, 0.94);
-    card.fillRoundedRect(-w / 2, -h / 2, w, h, 10);
-    card.lineStyle(2, 0xf5c542, 0.95);
-    card.strokeRoundedRect(-w / 2, -h / 2, w, h, 10);
+    card.fillStyle(0x171223, 0.97);
+    card.fillRoundedRect(-w / 2, -h / 2, w, h, 12);
+    card.lineStyle(2, 0xf5c542, 1);
+    card.strokeRoundedRect(-w / 2, -h / 2, w, h, 12);
 
-    var av = SG.Art.fit(this.add.image(-w / 2 + 30, 0, 'geos'), 'geos');
-    var name = SG.txt(this, -w / 2 + 56, -h / 2 + 9, SG.CFG.geos.name, 13, '#f5c542',
-      { originX: 0, originY: 0, strokeThickness: 3 });
-    msg.setPosition(-w / 2 + 56, -h / 2 + 27);
+    var av = SG.Art.fit(this.add.image(-w / 2 + 36, -h / 2 + 34, 'geos'), 'geos', 1.25);
+    var name = SG.txt(this, -w / 2 + 66, -h / 2 + 16, C.geos.name, 14, '#f5c542',
+      { originX: 0, originY: 0, strokeThickness: 0 });
+    msg.setPosition(-w / 2 + 66, -h / 2 + 38);
 
-    var box = this.add.container(W / 2, -h).setDepth(35);
+    var box = this.add.container(W / 2, H / 2).setDepth(41).setScale(0.86).setAlpha(0);
     box.add([card, av, name, msg]);
 
     SG.Audio.sfx('msg');
-    this.tweens.add({
-      targets: box, y: h / 2 + 14, duration: 380, ease: 'Back.easeOut',
-      hold: holdMs || 2400, yoyo: true,
-      onComplete: function () { box.destroy(); }
+    this.tweens.add({ targets: veil, alpha: 1, duration: 220 });
+    this.tweens.add({ targets: box, alpha: 1, scale: 1, duration: 280, ease: 'Back.easeOut' });
+
+    var btn = this.button(C.geos.accept, H / 2 + h / 2 - 28, function () {
+      veil.destroy(); box.destroy(); btn.destroy();
+      self.resumeWorld();
+      if (onAccept) onAccept();
     });
   },
 
@@ -739,29 +778,31 @@ SG.GameScene = new Phaser.Class({
     var self = this, C = SG.CFG;
     this.gift.hatOffered = true;
 
-    this.geosMessage(C.geos.hatMsg, 2600);
-
-    // расчищаем полосу: и то, что уже летит, и ближайшие спавны
+    // Полосу расчищаем сразу, до окна: на паузе перед глазами не должно
+    // висеть то, во что Серёга воткнётся в момент её снятия.
     this.clearEnts(true, function (e) { return e.kind === 'pickup'; });
-    this.spawnTimer = Math.max(this.spawnTimer, C.hat.clearLaneSec);
-    // страховка: если шапку каким-то чудом не подобрали — надеваем сами
-    this.hatDeadline = this.time.now + C.hat.spawnDelayMs + 9000;
 
-    this.time.delayedCall(C.hat.spawnDelayMs, function () {
-      if (self.phase !== 'run' || self.gift.hatOn) return;
-      // на уровне головы и с щедрым хитбоксом — промахнуться нельзя,
-      // иначе вся страховка теряет смысл
-      var y = self.G - 72;
-      var spr = self.add.sprite(self.W + 60, y, 'pick_hat')
-        .setOrigin(0.5, 0.5).setDepth(10);
-      SG.Art.fit(spr, 'pick_hat');
-      self.tweens.add({ targets: spr, angle: 12, duration: 500, yoyo: true, repeat: -1 });
-      self.addEnt({
-        kind: 'pickup', sub: 'hat', obj: spr, x: self.W + 60, cy: y,
-        hw: 30, hh: 30, vx: 0, baseY: y, t: 0
+    this.geosMessage(C.geos.hatMsg, function () {
+      self.spawnTimer = Math.max(self.spawnTimer, C.hat.clearLaneSec);
+      // страховка: если шапку каким-то чудом не подобрали — надеваем сами
+      self.hatDeadline = self.time.now + C.hat.spawnDelayMs + 9000;
+
+      self.time.delayedCall(C.hat.spawnDelayMs, function () {
+        if (self.phase !== 'run' || self.gift.hatOn) return;
+        // на уровне головы и с щедрым хитбоксом — промахнуться нельзя,
+        // иначе вся страховка теряет смысл
+        var y = self.G - 72;
+        var spr = self.add.sprite(self.W + 60, y, 'pick_hat')
+          .setOrigin(0.5, 0.5).setDepth(10);
+        SG.Art.fit(spr, 'pick_hat');
+        self.tweens.add({ targets: spr, angle: 12, duration: 500, yoyo: true, repeat: -1 });
+        self.addEnt({
+          kind: 'pickup', sub: 'hat', obj: spr, x: self.W + 60, cy: y,
+          hw: 30, hh: 30, vx: 0, baseY: y, t: 0
+        });
+        self.floatText(self.W - 70, self.G - 150, C.geos.hatHint, '#f5c542');
+        SG.Audio.sfx('whirr');
       });
-      self.floatText(self.W - 70, self.G - 150, C.geos.hatHint, '#f5c542');
-      SG.Audio.sfx('whirr');
     });
   },
 
@@ -831,25 +872,27 @@ SG.GameScene = new Phaser.Class({
     if (this.gift.dragonOffered) return;
     this.gift.dragonOffered = true;
 
-    this.geosMessage(C.geos.dragonMsg, 2600);
-
-    // сносим летящие таски, чтобы подгон было видно
+    // сносим летящие таски: и чтобы подгон было видно, и чтобы на паузе
+    // перед носом не висел таск, который прилетит в момент её снятия
     this.clearEnts(true, function (e) { return e.kind !== 'shot'; });
-    // страховка: если дракона почему-то не подобрали — зовём сами
-    this.dragonDeadline = this.time.now + 11000;
 
-    this.time.delayedCall(1400, function () {
-      if (self.phase !== 'boss' || self.gift.dragonUsed) return;
-      var y = self.G - 75;
-      var spr = self.add.sprite(self.W + 50, y, 'pick_dragon')
-        .setOrigin(0.5, 0.5).setDepth(10);
-      SG.Art.fit(spr, 'pick_dragon');
-      self.addEnt({
-        kind: 'pickup', sub: 'dragon', obj: spr, x: self.W + 50, cy: y,
-        hw: 30, hh: 30, vx: -170, baseY: y, t: 0
+    this.geosMessage(C.geos.dragonMsg, function () {
+      // страховка: если дракона почему-то не подобрали — зовём сами
+      self.dragonDeadline = self.time.now + 11000;
+
+      self.time.delayedCall(1400, function () {
+        if (self.phase !== 'boss' || self.gift.dragonUsed) return;
+        var y = self.G - 75;
+        var spr = self.add.sprite(self.W + 50, y, 'pick_dragon')
+          .setOrigin(0.5, 0.5).setDepth(10);
+        SG.Art.fit(spr, 'pick_dragon');
+        self.addEnt({
+          kind: 'pickup', sub: 'dragon', obj: spr, x: self.W + 50, cy: y,
+          hw: 30, hh: 30, vx: -170, baseY: y, t: 0
+        });
+        self.floatText(self.W - 80, self.G - 160, C.geos.dragonHint, '#f5c542');
+        SG.Audio.sfx('whirr');
       });
-      self.floatText(self.W - 80, self.G - 160, C.geos.dragonHint, '#f5c542');
-      SG.Audio.sfx('whirr');
     });
   },
 
@@ -1137,7 +1180,7 @@ SG.GameScene = new Phaser.Class({
     // кнопка загорается не сразу: тап, которым только что играли,
     // не должен проскочить плашку насквозь
     this.time.delayedCall(C.level.continueMs, function () {
-      items.push(self.continueButton(function () {
+      items.push(self.button(C.level.continueLabel, self.H / 2 + 92, function () {
         items.forEach(function (t) { t.destroy(); });
         self.resumeRun();
         self.tweens.add({
@@ -1148,16 +1191,19 @@ SG.GameScene = new Phaser.Class({
     });
   },
 
-  /* Мигающая кнопка «продолжить». Пока не нажали — забег не возобновляется.
+  /* Мигающая кнопка поверх всего. Пока не нажали — игра не идёт дальше.
    *
-   * Тап ловится по всему экрану, а не только по самой кнопке: попадать
-   * пальцем в рамку на бегу неудобно, да и привычка от титульного экрана
-   * ровно такая. Обработчик прыжка при этом не мешает — на плашке
-   * управление глухое (см. locked). */
-  continueButton: function (onPress) {
-    var self = this, C = SG.CFG;
-    var label = SG.txt(this, 0, 0, C.level.continueLabel, 16, '#f5c542');
-    var bw = Math.max(160, label.width + 48), bh = 34;
+   * Нажатие ловится по всему экрану, а не только по рамке: попадать
+   * пальцем в кнопку на телефоне неудобно, да и привычка от титульного
+   * экрана ровно такая. Прыжок при этом не срабатывает — и на плашке, и
+   * на паузе управление глухое.
+   *
+   * Подписка встаёт только после того, как кнопка проявилась: тап,
+   * которым игрок только что играл, не должен проскочить её насквозь. */
+  button: function (label, y, onPress) {
+    var self = this;
+    var txt = SG.txt(this, 0, 0, label, 16, '#f5c542');
+    var bw = Math.max(160, txt.width + 48), bh = 34;
 
     var frame = this.add.graphics();
     frame.fillStyle(0x171223, 0.92);
@@ -1165,22 +1211,12 @@ SG.GameScene = new Phaser.Class({
     frame.lineStyle(2, 0xf5c542, 1);
     frame.strokeRoundedRect(-bw / 2, -bh / 2, bw, bh, 9);
 
-    var btn = this.add.container(this.W / 2, this.H / 2 + 92).setDepth(41)
-      .setAlpha(0).setScale(0.9);
-    btn.add([frame, label]);
+    var btn = this.add.container(this.W / 2, y).setDepth(42).setAlpha(0).setScale(0.9);
+    btn.add([frame, txt]);
 
-    var blink = null;
-    this.tweens.add({
-      targets: btn, alpha: 1, scale: 1, duration: 240, ease: 'Back.easeOut',
-      onComplete: function () {
-        blink = self.tweens.add({
-          targets: btn, alpha: 0.35, duration: 620, yoyo: true, repeat: -1
-        });
-      }
-    });
-
-    var kb = this.input.keyboard;
+    var blink = null, kb = this.input.keyboard, armed = false;
     var press = function () {
+      if (!armed) return;
       // снимаем всё сразу: сработать должно ровно один раз, а лишние
       // подписки иначе доживут до конца забега
       self.input.off('pointerdown', press);
@@ -1191,6 +1227,17 @@ SG.GameScene = new Phaser.Class({
       SG.Audio.sfx('select');
       onPress();
     };
+
+    this.tweens.add({
+      targets: btn, alpha: 1, scale: 1, duration: 240, ease: 'Back.easeOut',
+      onComplete: function () {
+        armed = true;
+        blink = self.tweens.add({
+          targets: btn, alpha: 0.35, duration: 620, yoyo: true, repeat: -1
+        });
+      }
+    });
+
     this.input.on('pointerdown', press);
     kb.on('keydown-SPACE', press);
     kb.on('keydown-ENTER', press);

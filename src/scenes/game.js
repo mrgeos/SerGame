@@ -33,7 +33,7 @@ SG.GameScene = new Phaser.Class({
     this.comboTimer = 0;
     this.shredUntil = 0;
     this.spawnTimer = 1.2;
-    this.pickupTimer = 16;
+    this.pickupTimer = 16;   // перебивается ниже, если есть учебные бонусы
     this.zoneIdx = 0;
     this.ents = [];
     this.paused = false;
@@ -49,10 +49,22 @@ SG.GameScene = new Phaser.Class({
     this.heroFrozen = false;          // true — спрайтом героя двигает кат-сцена
     this.lap = { score: 0, kills: 0, meters: 0 };   // с чего начался текущий этап
 
+    // учёба: что уже показывали за этот забег и чем гарантированно
+    // угостить на первом уровне
+    this.taught = {};
+    var tut = C.tutorial && C.tutorial.enabled ? C.tutorial : null;
+    this.demoPickups = tut ? tut.firstPickups.slice() : [];
+    this.demoAt = tut ? tut.firstPickupsAt.slice() : [];
+    this.modals = [];
+
     // подгоны от Геоса: выдаются один раз за забег
     this.gift = { hatOffered: false, hatOn: false, dragonOffered: false, dragonUsed: false };
     this.cinematic = false;
     this.bossElapsed = 0;
+
+    // обычный спавнер на первом уровне придерживаем: учебные бонусы
+    // выдаются отдельно, и втроём они бы толпились
+    if (this.demoPickups.length) this.pickupTimer = 26;
 
     this.buildWorld();
     this.buildHero();
@@ -254,6 +266,13 @@ SG.GameScene = new Phaser.Class({
       this.spawnTimer = (0.95 - 0.32 * prog) + Math.random() * 0.55;
     }
 
+    // учебные бонусы — по расстоянию, чтобы точно попали в первый уровень
+    if (this.demoAt.length && this.meters >= this.demoAt[0]) {
+      this.demoAt.shift();
+      this.spawnPickup(this.demoPickups.shift());
+      this.pickupTimer = Math.max(this.pickupTimer, 8);
+    }
+
     this.pickupTimer -= dt;
     if (this.pickupTimer <= 0) {
       this.spawnPickup();
@@ -293,7 +312,7 @@ SG.GameScene = new Phaser.Class({
     // мигание в неуязвимости
     this.heroSpr.setAlpha(now < h.invulnUntil ? (Math.floor(now / 70) % 2 ? 0.35 : 1) : 1);
 
-    // режим «шред» — золотая аура
+    // режим «море по колено» — золотая аура
     var shred = now < this.shredUntil;
     this.heroSpr.setTint(shred ? 0xffe08a : 0xffffff);
 
@@ -394,7 +413,7 @@ SG.GameScene = new Phaser.Class({
   updateEnts: function (dt) {
     var now = this.time.now;
     var atk = now < this.hero.attackUntil;
-    // шапка-дурилка работает как бесконечный «шред»: сносит всё телом
+    // шапка-дурилка работает как бесконечное «море по колено»: сносит всё телом
     var shred = now < this.shredUntil || this.gift.hatOn;
     var C = SG.CFG.run;
 
@@ -441,12 +460,22 @@ SG.GameScene = new Phaser.Class({
         if (inAtk) { this.smash(e, i); continue; }
       }
 
+      // бонус впервые показался в кадре — рассказываем, что это
+      if (e.kind === 'pickup' && !e.shown && e.x < this.W - 70) {
+        e.shown = true;
+        this.teachPickup(e.sub);
+      }
+
       // столкновение с героем
       if (Math.abs(e.x - hx) < e.hw + hhw && Math.abs(e.cy - hcy) < e.hh + hhh) {
         if (e.kind === 'pickup') { this.takePickup(e, i); continue; }
         if (shred) { this.smash(e, i); continue; }
-        this.hurt();
-        if (e.kind !== 'card') this.killEnt(e, i, true);
+
+        var lesson = this.canBeHurt() ? this.teach(e.kind) : null;
+        if (!lesson || lesson.costsLife) this.hurt();
+        // после урока препятствие убираем всегда: на паузе Серёга стоит
+        // прямо в нём, и без этого урок повторился бы сразу после неё
+        if (lesson || e.kind !== 'card') this.killEnt(e, i, true);
         continue;
       }
 
@@ -543,7 +572,7 @@ SG.GameScene = new Phaser.Class({
     } else {
       this.shredUntil = this.time.now + 6000;
       SG.Audio.sfx('coffee');
-      this.floatText(e.x, e.cy - 20, 'РЕЖИМ ШРЕД!', '#ffb3a6');
+      this.floatText(e.x, e.cy - 20, SG.CFG.modeName.toUpperCase() + '!', '#ffb3a6');
       this.cameras.main.flash(160, 255, 220, 140);
     }
     this.refreshLives();
@@ -551,15 +580,23 @@ SG.GameScene = new Phaser.Class({
     this.killEnt(e, idx, false);
   },
 
-  hurt: function () {
-    var now = this.time.now;
-    if (this.phase === 'dead') return;
-    if (now < this.hero.invulnUntil) return;
-    if (this.gift.hatOn || this.cinematic) return;      // в шапке-дурилке урона нет
+  /* Пройдёт ли сейчас урон. Вынесено отдельно, потому что по тому же
+   * правилу решается, показывать ли учебное окно: урок вместо удара
+   * имеет смысл только там, где удар вообще прошёл бы. */
+  canBeHurt: function () {
+    if (this.phase === 'dead') return false;
+    if (this.time.now < this.hero.invulnUntil) return false;
+    if (this.gift.hatOn || this.cinematic) return false;   // в шапке-дурилке урона нет
     // Геос уже написал — добить до того, как подгон дойдёт, не дадим,
     // иначе вся страховка бессмысленна
-    if (this.gift.hatOffered && !this.gift.hatWorn) return;
-    if (this.gift.dragonOffered && !this.gift.dragonUsed) return;
+    if (this.gift.hatOffered && !this.gift.hatWorn) return false;
+    if (this.gift.dragonOffered && !this.gift.dragonUsed) return false;
+    return true;
+  },
+
+  hurt: function () {
+    var now = this.time.now;
+    if (!this.canBeHurt()) return;
 
     this.lives--;
     this.combo = 0;
@@ -688,7 +725,7 @@ SG.GameScene = new Phaser.Class({
    *
    * Часы Phaser при этом продолжают идти — time.paused глушит только
    * таймеры, но не time.now. Поэтому абсолютные метки (неуязвимость,
-   * «шред», страховочные сроки подгонов) при снятии паузы сдвигаются
+   * «море по колено», страховочные сроки) при снятии паузы сдвигаются
    * на её длительность: иначе они тихо истекут, пока игрок читает. */
   pauseWorld: function () {
     if (this.paused) return;
@@ -710,23 +747,32 @@ SG.GameScene = new Phaser.Class({
     if (this.dragonDeadline) this.dragonDeadline += dt;
   },
 
-  /* Сообщение от Геоса: окно по центру поверх игры.
+  /* Окно поверх игры: картинка слева, заголовок, текст и кнопка.
    *
-   * Подгон — переломный момент забега, и текст должны успеть прочитать,
-   * поэтому мир на это время встаёт, а дальше игра идёт только по кнопке.
-   * Всё, что подгон запускает, вешается на onAccept: пока окно открыто,
-   * ни шапка, ни дракон появиться не должны. */
-  geosMessage: function (text, onAccept) {
-    var self = this, C = SG.CFG, W = this.W, H = this.H;
+   * На нём держатся и подгоны Геоса, и учебные подсказки первого уровня —
+   * разница только в картинке, заголовке и надписи на кнопке. Мир на время
+   * окна встаёт: и подгон, и урок надо успеть прочитать.
+   *
+   * Окна выстраиваются в очередь. Иначе повторный урок, который снимает
+   * жизнь, мог бы вызвать сообщение Геоса про шапку — и две карточки
+   * легли бы друг на друга. Пауза держится до последнего окна в очереди. */
+  modal: function (opt) {
+    this.modals = this.modals || [];
+    this.modals.push(opt);
     this.pauseWorld();
+    if (this.modals.length === 1) this.showModal(opt);
+  },
+
+  showModal: function (opt) {
+    var self = this, W = this.W, H = this.H;
 
     var veil = this.add.rectangle(0, 0, W, H, 0x0d0a16, 0.62)
       .setOrigin(0).setDepth(40).setAlpha(0);
 
     var w = Math.min(W - 56, 430);
-    var msg = SG.txt(this, 0, 0, text, 14, '#f2e9d8',
+    var msg = SG.txt(this, 0, 0, opt.text, 14, '#f2e9d8',
       { originX: 0, originY: 0, strokeThickness: 0, align: 'left', wrap: w - 86 });
-    var h = Math.max(44, msg.height) + 104;      // шапка с именем + кнопка
+    var h = Math.max(44, msg.height) + 104;      // шапка с заголовком + кнопка
 
     var card = this.add.graphics();
     card.fillStyle(0x171223, 0.97);
@@ -734,22 +780,91 @@ SG.GameScene = new Phaser.Class({
     card.lineStyle(2, 0xf5c542, 1);
     card.strokeRoundedRect(-w / 2, -h / 2, w, h, 12);
 
-    var av = SG.Art.fit(this.add.image(-w / 2 + 36, -h / 2 + 34, 'geos'), 'geos', 1.25);
-    var name = SG.txt(this, -w / 2 + 66, -h / 2 + 16, C.geos.name, 14, '#f5c542',
+    var icon = this.modalIcon(opt.icon, -w / 2 + 36, -h / 2 + 34);
+    var title = SG.txt(this, -w / 2 + 66, -h / 2 + 16, opt.title, 14, '#f5c542',
       { originX: 0, originY: 0, strokeThickness: 0 });
     msg.setPosition(-w / 2 + 66, -h / 2 + 38);
 
     var box = this.add.container(W / 2, H / 2).setDepth(41).setScale(0.86).setAlpha(0);
-    box.add([card, av, name, msg]);
+    box.add([card, icon, title, msg]);
 
-    SG.Audio.sfx('msg');
+    SG.Audio.sfx(opt.sfx || 'msg');
     this.tweens.add({ targets: veil, alpha: 1, duration: 220 });
     this.tweens.add({ targets: box, alpha: 1, scale: 1, duration: 280, ease: 'Back.easeOut' });
 
-    var btn = this.button(C.geos.accept, H / 2 + h / 2 - 28, function () {
+    var btn = this.button(opt.button, H / 2 + h / 2 - 28, function () {
       veil.destroy(); box.destroy(); btn.destroy();
-      self.resumeWorld();
-      if (onAccept) onAccept();
+      if (opt.onAccept) opt.onAccept();
+      self.modals.shift();
+      if (self.modals.length) self.showModal(self.modals[0]);
+      else self.resumeWorld();
+    });
+  },
+
+  /* Картинка в углу окна. Спрайты разного калибра — от медиатора до
+   * зомби, — поэтому вписываем их в общий квадратик, а не тянем каждый
+   * своим эталонным размером. */
+  modalIcon: function (key, x, y) {
+    var img = this.add.image(x, y, key);
+    SG.Art.fit(img, key);
+    var box = 52;
+    var k = Math.min(1, box / Math.max(img.displayWidth, img.displayHeight));
+    return img.setScale(img.scaleX * k, img.scaleY * k);
+  },
+
+  /* Сообщение от Геоса. Всё, что подгон запускает, вешается на onAccept:
+   * пока окно открыто, ни шапка, ни дракон появиться не должны. */
+  geosMessage: function (text, onAccept) {
+    var C = SG.CFG;
+    this.modal({
+      icon: 'geos', title: C.geos.name, text: text,
+      button: C.geos.accept, onAccept: onAccept
+    });
+  },
+
+  /* =====================================================================
+   *  УЧЕБНЫЕ ОКНА
+   *
+   *  Первый уровень объясняет игру на живых примерах: врезался в таск —
+   *  узнал, что их перепрыгивают. Первый урок бесплатный, второй уже
+   *  бьёт как обычно. Про бонусы рассказываем, когда предмет впервые
+   *  показался в кадре, — по разу.
+   * ===================================================================== */
+
+  /* Урок по столкновению. Возвращает null, если учить нечему, иначе
+   * говорит, снимать ли за это столкновение жизнь. */
+  teach: function (kind) {
+    var C = SG.CFG.tutorial;
+    if (!C || !C.enabled || this.zoneIdx !== C.zone) return null;
+    var lesson = C.lessons[kind];
+    if (!lesson) return null;
+
+    var seen = this.taught[kind] || 0;
+    if (seen >= C.shows) return null;
+    this.taught[kind] = seen + 1;
+
+    this.showLesson(lesson, seen > 0);
+    return { costsLife: seen > 0 };     // первое знакомство — бесплатно
+  },
+
+  /* Урок по бонусу: показывается один раз, когда предмет впервые попал в кадр */
+  teachPickup: function (sub) {
+    var C = SG.CFG.tutorial;
+    if (!C || !C.enabled || this.zoneIdx !== C.zone) return;
+    var lesson = C.lessons[sub];
+    if (!lesson || this.taught[sub]) return;
+    this.taught[sub] = 1;
+    this.showLesson(lesson, false);
+  },
+
+  showLesson: function (lesson, again) {
+    var C = SG.CFG.tutorial;
+    this.modal({
+      icon: lesson.icon,
+      title: lesson.title,
+      text: (again ? C.repeat : '') + lesson.text,
+      button: C.ok,
+      sfx: 'msg'
     });
   },
 
@@ -1156,7 +1271,7 @@ SG.GameScene = new Phaser.Class({
     SG.Audio.sfx('stage');
 
     var stats = '+' + gained + ' ' + SG.plural(gained, ['очко', 'очка', 'очков']) +
-                '   ·   ' + killed + ' ' + SG.plural(killed, ['менеджер', 'менеджера', 'менеджеров']) +
+                '   ·   ' + killed + ' ' + SG.plural(killed, SG.CFG.foe) +
                 '   ·   ' + walked + ' м';
     var rule = Math.min(W - 80, 340);
 

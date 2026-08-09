@@ -112,7 +112,8 @@ SG.VictoryScene = new Phaser.Class({
     });
 
     var sy = 104 + C.finale.lines.length * 22 + 16;
-    SG.txt(this, W / 2, sy, 'СЧЁТ ' + st.score + '   ·   ' + st.meters + ' м   ·   ' + st.kills + ' менеджеров',
+    SG.txt(this, W / 2, sy, 'СЧЁТ ' + st.score + '   ·   ' + st.meters + ' м   ·   ' + st.kills + ' ' +
+      SG.plural(st.kills, SG.CFG.foe),
       13, '#7de8ff', { strokeThickness: 3 }).setDepth(21);
 
     // если выручали подгоны — Геосу отдельное спасибо

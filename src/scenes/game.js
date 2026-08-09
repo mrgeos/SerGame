@@ -911,10 +911,26 @@ SG.GameScene = new Phaser.Class({
    *  мир тормозит, Серёга доходит до двери — дальше по обстоятельствам.
    * ===================================================================== */
 
-  /* У каких выходов есть створки. Ширина створки на экране равна половине
-   * проёма — она и задаёт, где стоят косяки, так что подгонять руками
-   * ничего не надо: поменялся масштаб спрайта — поехало и всё остальное. */
-  GATE_LEAF: { elevator: 'gate_elev_leaf', porch: 'gate_porch_leaf' },
+  /* Где на спрайте выхода дверь — долями от его размера.
+   *
+   *   cx   — центр проёма по ширине (у лифта посередине, у дома Серёги
+   *          подъезд смещён вправо);
+   *   w    — ширина проёма;
+   *   base — насколько порог поднят над землёй: дверь подъезда стоит
+   *          на цоколе, а не прямо на асфальте.
+   *
+   * Створка масштабируется ровно в половину проёма, поэтому её картинка
+   * должна быть вырезана по этой половине — тогда и высота сойдётся сама.
+   * Раскладка одна и для код-арта, и для подменяющей картинки. */
+  GATE_DOOR: {
+    elevator: { leaf: 'gate_elev_leaf',  cx: 0.5,  w: 44 / 60, base: 0 },
+    porch:    { leaf: 'gate_porch_leaf', cx: 0.762, w: 0.140,  base: 0.0146 }
+  },
+
+  /* Где сейчас дверь выхода по горизонтали */
+  doorX: function () {
+    return this.gate ? this.gate.x + this.gate.doorDx : Math.round(this.W * 0.8);
+  },
 
   startGate: function () {
     var C = SG.CFG, zone = C.zones[this.zoneIdx];
@@ -931,25 +947,38 @@ SG.GameScene = new Phaser.Class({
 
   buildGate: function (kind) {
     var key = 'gate_' + kind;
-    var x = this.W + 150;
-    var spr = SG.Art.fit(this.add.sprite(x, this.G, key).setOrigin(0.5, 1).setDepth(8), key);
-    // подъезд встаёт правее прочих выходов, но целиком в кадре: у босса
-    // перед ним ещё драка, обрезанная кулиса тут ни к чему
-    var restX = Math.min(Math.round(this.W * (kind === 'porch' ? 0.80 : 0.72)),
-                         Math.round(this.W - spr.displayWidth / 2 - 8));
-    var g = { kind: kind, spr: spr, x: x, restX: restX, leaves: [], dx: [] };
+    var spr = SG.Art.fit(this.add.sprite(0, this.G, key).setOrigin(0.5, 1).setDepth(8), key);
+    var halfW = spr.displayWidth / 2;
+    var d = this.GATE_DOOR[kind];
+
+    // Дом Серёги встаёт правым краем к обрезу экрана: он шире прочих
+    // выходов, а подъезд у него сбоку — так дверь оказывается в кадре
+    // с запасом слева, где потом дерётся босс.
+    var restX = kind === 'porch'
+      ? Math.round(this.W - halfW)
+      : Math.min(Math.round(this.W * 0.72), Math.round(this.W - halfW - 8));
+
+    var g = {
+      kind: kind, spr: spr, x: Math.round(this.W + halfW + 60), restX: restX,
+      leaves: [], dx: [], doorDx: 0
+    };
 
     // Створки прижимаются к косякам: левая растёт вправо от левого косяка,
     // правая — влево от правого. Открываются сжатием по X, то есть уезжают
     // каждая в свою стену, как настоящие.
-    var lk = this.GATE_LEAF[kind];
-    if (lk && SG.Art.DESIGN[lk]) {
-      var half = SG.Art.DESIGN[lk].dw;
-      var l = SG.Art.fit(this.add.sprite(x - half, this.G, lk).setOrigin(0, 1).setDepth(9), lk);
-      var r = SG.Art.fit(this.add.sprite(x + half, this.G, lk).setOrigin(1, 1).setDepth(9), lk);
-      l.baseSX = l.scaleX; r.baseSX = r.scaleX;
-      g.leaves = [l, r];
-      g.dx = [-half, half];
+    if (d) {
+      var half = spr.displayWidth * d.w / 2;
+      var doorY = this.G - spr.displayHeight * d.base;
+      g.doorDx = spr.displayWidth * (d.cx - 0.5);
+      g.dx = [g.doorDx - half, g.doorDx + half];
+
+      for (var i = 0; i < 2; i++) {
+        var o = this.add.sprite(0, doorY, d.leaf).setOrigin(i, 1).setDepth(9);
+        var img = o.texture.getSourceImage();
+        o.setScale(half / ((img && img.width) || half));
+        o.baseSX = o.scaleX;
+        g.leaves.push(o);
+      }
     }
     this.gate = g;
   },
@@ -1026,9 +1055,10 @@ SG.GameScene = new Phaser.Class({
 
     this.gateStep = 'walk';
     this.openGateDoors();
-    var dist = Math.abs(g.restX - this.heroX);
+    var door = this.doorX();
+    var dist = Math.abs(door - this.heroX);
     this.tweens.add({
-      targets: this, heroX: g.restX, duration: Math.max(500, dist * 2.1),
+      targets: this, heroX: door, duration: Math.max(500, dist * 2.1),
       ease: 'Sine.easeInOut', delay: 260,
       onComplete: function () { self.enterGate(); }
     });
@@ -1156,8 +1186,8 @@ SG.GameScene = new Phaser.Class({
     SG.Audio.music('boss');
 
     // выходит из подъезда и загораживает дверь
-    var doorX = this.gate ? this.gate.restX : Math.round(this.W * 0.86);
-    this.bossBaseX = Math.round(doorX - 118);
+    var doorX = this.doorX();
+    this.bossBaseX = Math.round(doorX - 130);
     this.bossSpr = this.add.sprite(doorX, this.G, 'boss_idle')
       .setOrigin(0.5, 1).setDepth(11);
     SG.Art.fit(this.bossSpr, 'boss_idle');
@@ -1328,7 +1358,7 @@ SG.GameScene = new Phaser.Class({
     var self = this, g = this.gate;
     this.openGateDoors();
 
-    var target = g ? g.restX : this.W + 90;
+    var target = g ? this.doorX() : this.W + 90;
     var dist = Math.abs(target - this.heroX);
     this.tweens.add({
       targets: this, heroX: target, duration: Math.max(700, dist * 2.2), ease: 'Sine.easeIn',

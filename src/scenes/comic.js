@@ -50,10 +50,37 @@ SG.ComicScene = new Phaser.Class({
       if (ev) ev.stopPropagation();
       self.finish();
     });
+    // кнопка звука здесь же: если музыку выключили когда-то давно, это
+    // видно сразу, а не остаётся гадать, почему тихо
+    var label = function () { return SG.Audio.isMuted() ? '♪ ВЫКЛ' : '♪ ВКЛ'; };
+    this.muteBtn = SG.txt(this, this.skipBtn.x + this.skipBtn.width + 16,
+      H - this.BAR / 2, label(), 12, '#a9a3c8',
+      { originX: 0, originY: 0.5, strokeThickness: 0 }).setDepth(40);
+    this.muteBtn.setInteractive({ useHandCursor: true });
+    this.muteBtn.on('pointerdown', function (p, lx, ly, ev) {
+      if (ev) ev.stopPropagation();
+      SG.Audio.init();
+      SG.Audio.toggleMute();
+      self.muteBtn.setText(label());
+      if (!SG.Audio.isMuted()) SG.Audio.music('comic');
+    });
+
     this.counter = SG.txt(this, W / 2, H - this.BAR / 2, '', 12, '#bdb7d8',
       { strokeThickness: 0 }).setDepth(40);
 
     this.showPage();
+  },
+
+  /* Тап по кнопкам нижней полосы не должен листать страницу: слушатель
+   * листания висит на всём экране, и один тап дошёл бы до обоих. */
+  barHit: function (p) {
+    var x = p.worldX === undefined ? p.x : p.worldX;
+    var y = p.worldY === undefined ? p.y : p.worldY;
+    var btns = [this.skipBtn, this.muteBtn];
+    for (var i = 0; i < btns.length; i++) {
+      if (Phaser.Geom.Rectangle.Contains(btns[i].getBounds(), x, y)) return true;
+    }
+    return false;
   },
 
   showPage: function () {
@@ -160,15 +187,16 @@ SG.ComicScene = new Phaser.Class({
 
     var kb = this.input.keyboard;
     var press = function () {
-      self.input.off('pointerdown', press);
+      self.input.off('pointerdown', tap);
       kb.off('keydown-SPACE', press);
       kb.off('keydown-ENTER', press);
       SG.Audio.sfx('select');
       self.turnPage();
     };
+    var tap = function (p) { if (!self.barHit(p)) press(); };
     // небольшая задержка, чтобы тот же тап не пролистнул сразу две страницы
     this.time.delayedCall(120, function () {
-      self.input.on('pointerdown', press);
+      self.input.on('pointerdown', tap);
       kb.on('keydown-SPACE', press);
       kb.on('keydown-ENTER', press);
     });

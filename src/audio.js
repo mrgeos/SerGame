@@ -28,7 +28,40 @@ SG.Audio = (function () {
     return curve;
   }
 
+  /* Айфон с включённым бесшумным режимом глушит WebAudio: страница по
+   * умолчанию сидит в «звонковой» аудиосессии, которую рубит переключатель
+   * на боку. Стоит начать проигрывать обычный <audio>, и сессия становится
+   * «медийной» — тогда звук идёт даже при выключенном звонке. Гоняем по
+   * кругу секунду тишины, слышно её быть не может.
+   */
+  var silent = null;
+
+  function unmuteSwitch() {
+    if (silent) { silent.play().catch(function () {}); return; }
+    try {
+      var sr = 8000, n = sr;                       // секунда 8-битной тишины
+      var b = new Uint8Array(44 + n), dv = new DataView(b.buffer);
+      function s(o, t) { for (var i = 0; i < t.length; i++) b[o + i] = t.charCodeAt(i); }
+      s(0, 'RIFF'); dv.setUint32(4, 36 + n, true); s(8, 'WAVEfmt ');
+      dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, 1, true);
+      dv.setUint32(24, sr, true); dv.setUint32(28, sr, true);
+      dv.setUint16(32, 1, true); dv.setUint16(34, 8, true);
+      s(36, 'data'); dv.setUint32(40, n, true);
+      b.fill(128, 44);                             // 128 — ноль для 8 бит без знака
+
+      silent = document.createElement('audio');
+      silent.loop = true;
+      silent.playsInline = true;
+      silent.setAttribute('playsinline', '');
+      silent.src = URL.createObjectURL(new Blob([b], { type: 'audio/wav' }));
+      silent.style.display = 'none';
+      document.body.appendChild(silent);       // оторванный от страницы iOS не жалует
+      silent.play().catch(function () {});
+    } catch (e) { silent = null; }
+  }
+
   function init() {
+    unmuteSwitch();
     if (ctx) { if (ctx.state === 'suspended') ctx.resume(); return; }
     var AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
@@ -257,6 +290,14 @@ SG.Audio = (function () {
 
     stopMusic: function () {
       if (timer) { clearInterval(timer); timer = null; }
+    },
+
+    /* Уход из вкладки глушит музыку — по возвращении её надо завести
+     * снова, иначе дальше играется тишина до конца забега. */
+    resumeMusic: function () {
+      if (!ready || timer) return;
+      if (ctx.state === 'suspended') ctx.resume();
+      this.music(track);
     },
 
     toggleMute: function () {

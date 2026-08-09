@@ -57,11 +57,23 @@
 
   /* ---- пауза при уходе из вкладки -------------------------------------- */
 
+  /* Уход из вкладки замораживает сцены и глушит музыку — по возвращении
+   * и то и другое надо вернуть, иначе игра остаётся стоять в тишине. */
+  var pausedByHide = false;
+
   document.addEventListener('visibilitychange', function () {
     if (document.hidden) {
       SG.Audio.stopMusic();
-      activeScenes().forEach(function (sc) { sc.scene.pause(); });
+      var s = activeScenes();
+      if (s.length) { s.forEach(function (sc) { sc.scene.pause(); }); pausedByHide = true; }
     } else {
+      if (pausedByHide) {
+        pausedByHide = false;
+        game.scene.getScenes(false).forEach(function (sc) {
+          if (sc.scene.isPaused()) sc.scene.resume();
+        });
+      }
+      SG.Audio.resumeMusic();
       checkOrientation();
     }
   });

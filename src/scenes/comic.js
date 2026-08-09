@@ -15,9 +15,8 @@ SG.ComicScene = new Phaser.Class({
   Extends: Phaser.Scene,
   initialize: function ComicScene() { Phaser.Scene.call(this, { key: 'Comic' }); },
 
-  /* Страница светлая: на кадрах 6 и 8 реплики врисованы чёрным, и на тёмном
-   * фоне они пропадали. Заодно всё вместе читается как страница комикса. */
-  PAGE: 0xd8efaf,
+  PAGE: 0x3a3475,           // фиолетовый под цвет игры
+
   BAR: 34,                    // нижняя полоса под кнопки, чтобы не лезли на рисунок
 
   create: function () {
@@ -34,20 +33,20 @@ SG.ComicScene = new Phaser.Class({
     if (!this.frames.length) { this.scene.start('Game'); return; }
 
     this.add.rectangle(0, 0, W, H, this.PAGE).setOrigin(0).setDepth(0);
-    this.add.rectangle(0, H - this.BAR, W, 1, 0x171223, 0.25).setOrigin(0).setDepth(38);
+    this.add.rectangle(0, H - this.BAR, W, 1, 0xffffff, 0.18).setOrigin(0).setDepth(38);
 
     this.page = 0;
     this.done = false;
     this.shown = [];
 
-    this.skipBtn = SG.txt(this, 14, H - this.BAR / 2, C.skip, 12, '#6b6480',
+    this.skipBtn = SG.txt(this, 14, H - this.BAR / 2, C.skip, 12, '#a9a3c8',
       { originX: 0, originY: 0.5, strokeThickness: 0 }).setDepth(40);
     this.skipBtn.setInteractive({ useHandCursor: true });
     this.skipBtn.on('pointerdown', function (p, lx, ly, ev) {
       if (ev) ev.stopPropagation();
       self.finish();
     });
-    this.counter = SG.txt(this, W / 2, H - this.BAR / 2, '', 12, '#8b86a4',
+    this.counter = SG.txt(this, W / 2, H - this.BAR / 2, '', 12, '#bdb7d8',
       { strokeThickness: 0 }).setDepth(40);
 
     this.showPage();

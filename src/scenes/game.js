@@ -143,6 +143,65 @@ SG.GameScene = new Phaser.Class({
     this.add.rectangle(W / 2, this.H - 8, W - 120, 4, 0x171223, 0.6).setDepth(30);
     this.progBar = this.add.rectangle(60, this.H - 8, 0, 4, 0xf5c542).setOrigin(0, 0.5).setDepth(30);
     this.homeIcon = SG.txt(this, W - 52, this.H - 8, 'ДОМ', 11, '#c9c3dd', { strokeThickness: 3 }).setDepth(30);
+
+    this.buildShredHud();
+  },
+
+  /* Табло режима «море по колено»: название и остаток времени.
+   * Стоит под жизнями — там пусто, и взгляд туда уже приучен ходить. */
+  buildShredHud: function () {
+    this.SHRED_BAR = 152;
+    this.shredLabel = SG.txt(this, 14, 34, SG.CFG.modeName.toUpperCase(), 11, '#f5c542',
+      { originX: 0, originY: 0, strokeThickness: 3 }).setDepth(30).setAlpha(0);
+    this.shredBarBg = this.add.rectangle(14, 54, this.SHRED_BAR, 7, 0x171223, 0.75)
+      .setOrigin(0, 0.5).setDepth(30).setAlpha(0);
+    this.shredBar = this.add.rectangle(15, 54, this.SHRED_BAR - 2, 5, 0xf5c542)
+      .setOrigin(0, 0.5).setDepth(30).setAlpha(0);
+
+    // золотая засветка поверх сцены — «весь экран в режиме»
+    this.shredGlow = this.add.rectangle(0, 0, this.W, this.H, 0xf5c542)
+      .setOrigin(0).setDepth(28).setAlpha(0).setBlendMode(Phaser.BlendModes.ADD);
+  },
+
+  /* Пока режим идёт: фон пульсирует золотом, поверх сцены дышит засветка,
+   * слева тикает полоса остатка. Фон красим тинтом, а не заливкой поверх, —
+   * так препятствия и герой остаются в своих цветах и хорошо читаются. */
+  updateShred: function () {
+    var now = this.time.now, on = now < this.shredUntil;
+
+    if (!on) {
+      if (this.shredWasOn) {
+        this.shredWasOn = false;
+        this.shredGlow.setAlpha(0);
+        this.tintZone(0xffffff);
+        [this.shredLabel, this.shredBarBg, this.shredBar]
+          .forEach(function (o) { o.setAlpha(0); });
+      }
+      return;
+    }
+
+    this.shredWasOn = true;
+    var left = Phaser.Math.Clamp((this.shredUntil - now) / SG.CFG.run.shredMs, 0, 1);
+    var pulse = 0.5 + 0.5 * Math.sin(now / 120);
+
+    this.shredLabel.setAlpha(1);
+    this.shredBarBg.setAlpha(0.85);
+    this.shredBar.setAlpha(1);
+    this.shredBar.width = (this.SHRED_BAR - 2) * left;
+    // на последней секунде полоса начинает моргать — время выходит
+    if (left < 0.18) this.shredBar.setAlpha(pulse > 0.5 ? 1 : 0.25);
+
+    // засветку поверх сцены держим слабой — она бьёт и по герою,
+    // а вот фон уводим в золото сильно: его перекрывать некому
+    this.shredGlow.setAlpha(0.04 + pulse * 0.09);
+    this.tintZone((255 << 16) |
+                  (Math.round(255 + (0xc8 - 255) * pulse) << 8) |
+                   Math.round(255 + (0x50 - 255) * pulse));
+  },
+
+  tintZone: function (tint) {
+    var z = this.zones[this.zoneIdx];
+    z.sky.setTint(tint); z.far.setTint(tint); z.near.setTint(tint); z.gnd.setTint(tint);
   },
 
   bindInput: function () {
@@ -240,6 +299,7 @@ SG.GameScene = new Phaser.Class({
     this.updateHat(dt);
     this.updateEnts(dt);
     this.updateScroll(dt);
+    this.updateShred();
     this.updateHud(dt);
   },
 
@@ -312,9 +372,17 @@ SG.GameScene = new Phaser.Class({
     // мигание в неуязвимости
     this.heroSpr.setAlpha(now < h.invulnUntil ? (Math.floor(now / 70) % 2 ? 0.35 : 1) : 1);
 
-    // режим «море по колено» — золотая аура
-    var shred = now < this.shredUntil;
-    this.heroSpr.setTint(shred ? 0xffe08a : 0xffffff);
+    // режим «море по колено»: герой мигает золотом и сыплет искрами —
+    // ровной подсветки в динамике было почти не видно
+    if (now < this.shredUntil) {
+      this.heroSpr.setTint(Math.floor(now / 120) % 2 ? 0xfff3b0 : 0xffa32a);
+      if (Math.random() < 0.35) {
+        this.burst(this.heroX + (Math.random() - 0.5) * 26,
+                   h.y - 20 - Math.random() * 40, 'fx_spark', 1);
+      }
+    } else {
+      this.heroSpr.setTint(0xffffff);
+    }
 
     this.heroShadow.y = this.G + 2;
     var airFrac = Phaser.Math.Clamp((this.G - h.y) / 120, 0, 1);
@@ -629,7 +697,7 @@ SG.GameScene = new Phaser.Class({
       SG.Audio.sfx('pickup');
       this.floatText(e.x, e.cy - 20, '+МЕДИАТОР', '#f5c542');
     } else {
-      this.shredUntil = this.time.now + 6000;
+      this.shredUntil = this.time.now + SG.CFG.run.shredMs;
       SG.Audio.sfx('coffee');
       this.floatText(e.x, e.cy - 20, SG.CFG.modeName.toUpperCase() + '!', '#ffb3a6');
       this.cameras.main.flash(160, 255, 220, 140);
@@ -715,7 +783,9 @@ SG.GameScene = new Phaser.Class({
     idx = Math.min(idx, this.zones.length - 1);
     if (idx === this.zoneIdx) return;
     var from = this.zones[this.zoneIdx], to = this.zones[idx];
-    [from.sky, from.far, from.near, from.gnd].forEach(function (o) { o.setAlpha(0); });
+    [from.sky, from.far, from.near, from.gnd].forEach(function (o) {
+      o.setAlpha(0); o.setTint(0xffffff);
+    });
     [to.sky, to.far, to.near, to.gnd].forEach(function (o) { o.setAlpha(1); });
     this.zoneIdx = idx;
   },
@@ -986,16 +1056,34 @@ SG.GameScene = new Phaser.Class({
     this.speedLines = [];
   },
 
+  /* Шапка отработала уровень и слетает.
+   *
+   * На прощание возвращает жизни: без этого Серёга остался бы на новом
+   * уровне с одной и без защиты, а подарок проиграть нельзя. И сбрасывает
+   * флаги подгона — если жизни снова кончатся, Геос пришлёт новую шапку. */
   dropHat: function () {
     if (!this.gift.hatOn) return;
+    var C = SG.CFG;
     this.gift.hatOn = false;
+    this.gift.hatOffered = false;
+    this.gift.hatWorn = false;
+    this.hatDeadline = 0;
+
     var h = this.hatSpr, p = this.hatProp;
     this.hatSpr = null; this.hatProp = null;
     this.tweens.add({
       targets: [h, p], y: '-=60', x: '-=90', alpha: 0, angle: 200, duration: 900,
       onComplete: destroyTargets
     });
-    this.floatText(this.heroX, this.G - 130, SG.CFG.geos.hatOff, '#c9c3dd');
+    this.floatText(this.heroX, this.G - 130, C.geos.hatOff, '#c9c3dd');
+
+    if (this.lives < C.hat.livesBack) {
+      this.lives = C.hat.livesBack;
+      this.refreshLives();
+      this.floatText(this.heroX, this.G - 158, '+' + C.hat.livesBack + ' ' +
+        SG.plural(C.hat.livesBack, ['ЖИЗНЬ', 'ЖИЗНИ', 'ЖИЗНЕЙ']), '#f5c542');
+      SG.Audio.sfx('pickup');
+    }
   },
 
   /* Куда сажать шапку: считаем от высоты спрайта героя, потому что
@@ -1138,6 +1226,8 @@ SG.GameScene = new Phaser.Class({
 
     // расчищаем полосу: у двери урона быть не должно
     this.clearEnts(true);
+    // шапка работает ровно один уровень: до выхода донесла — и хватит
+    this.dropHat();
 
     this.buildGate(zone.gate);
     this.floatText(this.W - 70, this.G - 170, zone.hint, '#f5c542');

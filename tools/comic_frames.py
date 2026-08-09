@@ -23,13 +23,15 @@ import glob
 import os
 import re
 
-from PIL import Image
+from PIL import Image, ImageFilter
 
 SRC = 'assets/source/comic'
 OUT = 'assets/comic'
 
 KEY_DIST = 110      # допуск до цвета хромакея
-SPILL = 18          # насколько гасим зелёную кайму
+SPILL = 18          # насколько гасим зелёную кайму в глубине кадра
+EDGE = 7            # ширина каймы у выреза, где деспилл работает в полную силу
+EDGE_CUT = 70       # в кайме всё зеленее этого — тоже фон, дорезаем
 
 
 def greenish(c):
@@ -61,6 +63,26 @@ def cut(path):
             elif g > (r + b) / 2 + SPILL:
                 mid = (r + b) // 2
                 op[x, y] = (r, min(g, mid + SPILL), b, a)
+
+    # Кайма у самого выреза остаётся зелёной: там пиксель наполовину фон,
+    # и до цвета хромакея ему далеко, а тёмные обводки вдобавок не проходят
+    # проверку greenish. Поэтому вдоль границы деспилл идёт в полную силу —
+    # зелень сводится к серому. Внутрь фигуры это не лезет, так что зелёная
+    # кожа зомби не страдает: она далеко от края.
+    hole = out.split()[3].point(lambda v: 0 if v else 255)
+    near = hole.filter(ImageFilter.MaxFilter(EDGE)).load()
+    for y in range(h):
+        for x in range(w):
+            if not near[x, y]:
+                continue
+            r, g, b, a = op[x, y]
+            if not a:
+                continue
+            top = max(r, b)
+            if g - top > EDGE_CUT:
+                op[x, y] = (0, 0, 0, 0)
+            elif g > top:
+                op[x, y] = (r, top, b, a)
     return out, key
 
 

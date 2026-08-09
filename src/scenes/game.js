@@ -1756,8 +1756,6 @@ SG.GameScene = new Phaser.Class({
         SG.state.score = Math.round(self.score);
         SG.state.meters = Math.round(self.meters);
         SG.state.kills = self.kills;
-        SG.state.usedHat = !!self.gift.hatWorn;
-        SG.state.usedDragon = !!self.gift.dragonUsed;
         SG.state.saveBest(Math.round(self.score));
         SG.state.markWon();
         SG.Audio.stopMusic();

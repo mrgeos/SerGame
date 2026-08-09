@@ -23,20 +23,16 @@ SG.MenuScene = new Phaser.Class({
 
     SG.txt(this, W / 2, 52, C.hero.toUpperCase(), 42, '#f5c542');
     SG.txt(this, W / 2, 88, 'СПЕШИТ ДОМОЙ', 22, '#f2e9d8');
-    SG.txt(this, W / 2, 112, 'там торт', 14, '#c9c3dd', { light: true, strokeThickness: 3 });
 
     // Подсказка по управлению
     var hy = H - 46;
     SG.txt(this, W * 0.27, hy - 16, '◀ ЛЕВАЯ ПОЛОВИНА', 13, '#8de0ff', { strokeThickness: 3 });
     SG.txt(this, W * 0.27, hy + 2, 'ПРЫЖОК (можно двойной)', 12, '#c9c3dd', { light: true, strokeThickness: 3 });
     SG.txt(this, W * 0.73, hy - 16, 'ПРАВАЯ ПОЛОВИНА ▶', 13, '#ffb3a6', { strokeThickness: 3 });
-    SG.txt(this, W * 0.73, hy + 2, 'АККОРД — БЬЁТ МЕНЕДЖЕРОВ', 12, '#c9c3dd', { light: true, strokeThickness: 3 });
+    SG.txt(this, W * 0.73, hy + 2, 'АККОРД — БЬЁТ КЛИЕНТОВ', 12, '#c9c3dd', { light: true, strokeThickness: 3 });
 
     if (SG.state.best > 0) {
       SG.txt(this, W / 2, 136, 'ЛУЧШИЙ СЧЁТ: ' + SG.state.best, 14, '#c9c3dd', { strokeThickness: 3 });
-    }
-    if (SG.state.won) {
-      SG.txt(this, W / 2, 156, 'ТОРТ УЖЕ БЫЛ СЪЕДЕН ✓', 12, '#7de8ff', { light: true, strokeThickness: 3 });
     }
 
     this.startHint = SG.txt(this, W / 2, 188, 'ТАП — ПОЕХАЛИ', 20, '#f5c542');

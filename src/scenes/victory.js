@@ -111,18 +111,12 @@ SG.VictoryScene = new Phaser.Class({
       self.tweens.add({ targets: t, alpha: 1, duration: 340, delay: 250 + i * 220 });
     });
 
-    var sy = 104 + C.finale.lines.length * 22 + 16;
+    // Кроме поздравления и статистики на финале ничего не пишем: экран
+    // и так самый нагруженный за забег, а смотреть тут надо на торт.
+    var sy = 104 + C.finale.lines.length * 22 + 18;
     SG.txt(this, W / 2, sy, 'СЧЁТ ' + st.score + '   ·   ' + st.meters + ' м   ·   ' + st.kills + ' ' +
       SG.plural(st.kills, SG.CFG.foe),
       13, '#7de8ff', { strokeThickness: 3 }).setDepth(21);
-
-    // если выручали подгоны — Геосу отдельное спасибо
-    var thanks = st.usedDragon ? C.geos.thanksDragon
-               : st.usedHat    ? C.geos.thanksHat
-               : null;
-    if (thanks) {
-      SG.txt(this, W / 2, sy + 20, thanks, 12, '#f5c542', { light: true, strokeThickness: 3 }).setDepth(21);
-    }
 
     var hint = SG.txt(this, W / 2, H - 12, 'ТАП — ПОБЕЖАТЬ ЕЩЁ РАЗ', 15, '#c9c3dd').setDepth(21);
     this.tweens.add({ targets: hint, alpha: 0.3, duration: 700, yoyo: true, repeat: -1 });

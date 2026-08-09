@@ -748,7 +748,7 @@ SG.Art = (function () {
     return outline(o, P.out);
   }
 
-  function coffee() {  // кофе = режим «шред»
+  function coffee() {  // кофе = режим «море по колено»
     var o = cv(18, 20), g = o.g;
     px(g, 3, 6, 11, 11, P.white);
     px(g, 3, 6, 11, 3, P.red);

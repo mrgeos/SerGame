@@ -32,6 +32,10 @@ SG.ComicScene = new Phaser.Class({
     }
     if (!this.frames.length) { this.scene.start('Game'); return; }
 
+    // заставочная тема; в игре она сменится на забеговую
+    SG.Audio.init();
+    SG.Audio.music('comic');
+
     this.add.rectangle(0, 0, W, H, this.PAGE).setOrigin(0).setDepth(0);
     this.add.rectangle(0, H - this.BAR, W, 1, 0xffffff, 0.18).setOrigin(0).setDepth(38);
 

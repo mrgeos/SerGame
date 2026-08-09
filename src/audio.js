@@ -160,15 +160,39 @@ SG.Audio = (function () {
 
   /* ---- фоновая музыка -------------------------------------------------- */
 
-  /* Em – C – G – D, по 8 шестнадцатых на аккорд */
-  var PROG = {
-    run:  [[40, [40, 47, 52]], [36, [36, 43, 48]], [43, [43, 50, 55]], [38, [38, 45, 50]]],
-    boss: [[38, [38, 45, 50]], [37, [37, 44, 49]], [38, [38, 45, 50]], [43, [43, 49, 54]]]
+  /* Дорожки: аккорд на такт (8 шестнадцатых), бочка и рабочий — списками
+   * слотов. Где есть lead, поверх арпеджио идёт мелодия: массив на все
+   * такты подряд, null — пауза. */
+  var TRACKS = {
+    run: {
+      tempo: 168,
+      prog: [[40, [40, 47, 52]], [36, [36, 43, 48]], [43, [43, 50, 55]], [38, [38, 45, 50]]],
+      kick: [0, 3, 6], snare: [4]
+    },
+    boss: {
+      tempo: 190,
+      prog: [[38, [38, 45, 50]], [37, [37, 44, 49]], [38, [38, 45, 50]], [43, [43, 49, 54]]],
+      kick: [0, 3, 6], snare: [4, 7]
+    },
+    /* Комикс: Am – F – C – G с отдельной мелодией — заставочная тема
+     * в духе шестнадцатибитных приставок, помедленнее забега. */
+    comic: {
+      tempo: 150,
+      prog: [[45, [45, 52, 57]], [41, [41, 48, 53]], [36, [36, 43, 48]], [43, [43, 50, 55]]],
+      kick: [0, 6], snare: [4], arpVol: 0.05,
+      lead: [
+        81, 81, null, 84, null, 83, 81, null,
+        79, null, 77, null, 76, null, 77, 79,
+        81, 81, null, 84, null, 86, 84, null,
+        83, null, 81, null, 79, 78, 79, null
+      ]
+    }
   };
   var ARP = [0, 2, 1, 2, 0, 1, 2, 1];
 
   function scheduleStep(time) {
-    var prog = PROG[track] || PROG.run;
+    var tr = TRACKS[track] || TRACKS.run;
+    var prog = tr.prog;
     var bar = Math.floor(step / 8) % prog.length;
     var slot = step % 8;
     var root = prog[bar][0];
@@ -180,13 +204,23 @@ SG.Audio = (function () {
              at: time, through: musicGain });
     }
     // арпеджио
-    tone({ freq: hz(notes[ARP[slot]] + 12), type: 'square', dur: 0.1, vol: 0.09,
-           at: time, through: musicGain });
+    tone({ freq: hz(notes[ARP[slot]] + 12), type: 'square', dur: 0.1,
+           vol: tr.arpVol || 0.09, at: time, through: musicGain });
+    // мелодия: две расстроенные пилы — так лид звучит толще, чем один квадрат
+    if (tr.lead) {
+      var n = tr.lead[step % tr.lead.length];
+      if (n !== null && n !== undefined) {
+        tone({ freq: hz(n), type: 'sawtooth', dur: 0.19, vol: 0.14,
+               at: time, detune: -8, through: musicGain });
+        tone({ freq: hz(n), type: 'square', dur: 0.17, vol: 0.08,
+               at: time, detune: 9, through: musicGain });
+      }
+    }
     // бочка / рабочий / хэт
-    if (slot === 0 || slot === 3 || slot === 6) {
+    if (tr.kick.indexOf(slot) >= 0) {
       tone({ freq: 120, slideTo: 45, type: 'sine', dur: 0.13, vol: 0.34, at: time, through: musicGain });
     }
-    if (slot === 4 || (track === 'boss' && slot === 7)) {
+    if (tr.snare.indexOf(slot) >= 0) {
       noise({ dur: 0.13, freq: 1900, vol: 0.16, at: time, through: musicGain });
     }
     noise({ dur: 0.03, freq: 8000, vol: 0.05, at: time, through: musicGain });
@@ -211,8 +245,10 @@ SG.Audio = (function () {
 
     music: function (which) {
       if (!ready) return;
-      track = which;
-      tempo = which === 'boss' ? 190 : 168;
+      var next = TRACKS[which] ? which : 'run';
+      if (next !== track) step = 0;        // новая тема — с начала фразы
+      track = next;
+      tempo = TRACKS[track].tempo;
       if (timer) return;
       step = 0;
       nextTime = ctx.currentTime + 0.05;

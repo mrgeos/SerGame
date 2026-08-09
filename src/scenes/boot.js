@@ -15,6 +15,8 @@ SG.BootScene = new Phaser.Class({
     this.load.on('loaderror', function () {});
     this.load.json('sprite_manifest', 'assets/sprites/manifest.json');
     this.load.json('comic_manifest', 'assets/comic/manifest.json');
+    // постер титульного экрана; не загрузится — меню нарисует себя само
+    this.load.image('title', 'assets/title.jpg');
 
     var W = SG.VIEW.W, H = SG.VIEW.H;
     var bar = this.add.rectangle(W / 2, H / 2, 220, 6, 0x3a3556).setOrigin(0.5);

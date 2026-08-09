@@ -1571,9 +1571,32 @@ SG.GameScene = new Phaser.Class({
     }
   },
 
+  /* Реплика босса — в той же плашке, что у зомби-клиентов и у Серёги.
+   *
+   * Он один говорил всплывающим текстом и выбивался из общего вида.
+   * Всплывающий текст в игре остаётся, но только для отклика на действия
+   * и подсказок — «+МЕДИАТОР», названия аккордов, «ХВАТАЙ ШАПКУ»;
+   * речь персонажей везде в плашках. */
   bossSay: function () {
-    var L = SG.CFG.bossLines;
-    this.floatText(this.boss.x, this.G - 150, L[Math.floor(Math.random() * L.length)], '#ffb3a6');
+    var self = this, L = SG.CFG.bossLines;
+    if (this.bossBubble) this.bossBubble.destroy();
+
+    var b = this.bubble(this.boss.x, this.G - 172,
+      L[Math.floor(Math.random() * L.length)]).setDepth(20);
+    this.bossBubble = b;
+    this.tweens.add({
+      targets: b, alpha: 0, y: b.y - 14, delay: 2100, duration: 700,
+      onComplete: function () {
+        b.destroy();
+        if (self.bossBubble === b) self.bossBubble = null;
+      }
+    });
+  },
+
+  dropBossBubble: function () {
+    if (!this.bossBubble) return;
+    this.bossBubble.destroy();
+    this.bossBubble = null;
   },
 
   spawnShot: function (high) {
@@ -1665,6 +1688,7 @@ SG.GameScene = new Phaser.Class({
     }
 
     this.bossSpr.x = b.x;
+    if (this.bossBubble) this.bossBubble.x = b.x;
     var tex = 'boss_idle';
     if (b.hitFlash > 0) tex = 'boss_hurt';
     else if (b.st === 'windup' || b.st === 'charge') tex = 'boss_windup';
@@ -1677,6 +1701,7 @@ SG.GameScene = new Phaser.Class({
     var self = this;
     this.phase = 'outro';
     this.boss.st = 'dead';
+    this.dropBossBubble();
 
     SG.Audio.stopMusic();
     SG.Audio.sfx('win');

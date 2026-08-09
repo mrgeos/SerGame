@@ -1089,7 +1089,8 @@ SG.GameScene = new Phaser.Class({
   },
 
   /* Плашка с итогом этапа. Экран гаснет, под ним меняются декорации,
-   * потом Серёга вбегает в новую зону слева. Тапа не ждём. */
+   * а следующий уровень ждёт нажатия: это единственная пауза за забег,
+   * и торопить тут некуда — пусть счёт успеют прочитать. */
   stageCleared: function () {
     var self = this, C = SG.CFG, W = this.W, H = this.H;
     var zone = C.zones[this.zoneIdx];
@@ -1133,14 +1134,67 @@ SG.GameScene = new Phaser.Class({
     this.setZone(this.zoneIdx + 1);
     this.lap = { score: Math.round(this.score), kills: this.kills, meters: this.meters };
 
-    this.time.delayedCall(C.level.panelMs, function () {
-      items.forEach(function (t) { t.destroy(); });
-      self.resumeRun();
-      self.tweens.add({
-        targets: veil, alpha: 0, duration: 500,
-        onComplete: function () { veil.destroy(); }
-      });
+    // кнопка загорается не сразу: тап, которым только что играли,
+    // не должен проскочить плашку насквозь
+    this.time.delayedCall(C.level.continueMs, function () {
+      items.push(self.continueButton(function () {
+        items.forEach(function (t) { t.destroy(); });
+        self.resumeRun();
+        self.tweens.add({
+          targets: veil, alpha: 0, duration: 500,
+          onComplete: function () { veil.destroy(); }
+        });
+      }));
     });
+  },
+
+  /* Мигающая кнопка «продолжить». Пока не нажали — забег не возобновляется.
+   *
+   * Тап ловится по всему экрану, а не только по самой кнопке: попадать
+   * пальцем в рамку на бегу неудобно, да и привычка от титульного экрана
+   * ровно такая. Обработчик прыжка при этом не мешает — на плашке
+   * управление глухое (см. locked). */
+  continueButton: function (onPress) {
+    var self = this, C = SG.CFG;
+    var label = SG.txt(this, 0, 0, C.level.continueLabel, 16, '#f5c542');
+    var bw = Math.max(160, label.width + 48), bh = 34;
+
+    var frame = this.add.graphics();
+    frame.fillStyle(0x171223, 0.92);
+    frame.fillRoundedRect(-bw / 2, -bh / 2, bw, bh, 9);
+    frame.lineStyle(2, 0xf5c542, 1);
+    frame.strokeRoundedRect(-bw / 2, -bh / 2, bw, bh, 9);
+
+    var btn = this.add.container(this.W / 2, this.H / 2 + 92).setDepth(41)
+      .setAlpha(0).setScale(0.9);
+    btn.add([frame, label]);
+
+    var blink = null;
+    this.tweens.add({
+      targets: btn, alpha: 1, scale: 1, duration: 240, ease: 'Back.easeOut',
+      onComplete: function () {
+        blink = self.tweens.add({
+          targets: btn, alpha: 0.35, duration: 620, yoyo: true, repeat: -1
+        });
+      }
+    });
+
+    var kb = this.input.keyboard;
+    var press = function () {
+      // снимаем всё сразу: сработать должно ровно один раз, а лишние
+      // подписки иначе доживут до конца забега
+      self.input.off('pointerdown', press);
+      kb.off('keydown-SPACE', press);
+      kb.off('keydown-ENTER', press);
+      if (blink) blink.stop();
+      btn.setAlpha(1);
+      SG.Audio.sfx('select');
+      onPress();
+    };
+    this.input.on('pointerdown', press);
+    kb.on('keydown-SPACE', press);
+    kb.on('keydown-ENTER', press);
+    return btn;
   },
 
   resumeRun: function () {

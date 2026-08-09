@@ -1,5 +1,15 @@
 {
-  "_": "Кадры комикса перед забегом, по порядку. Пусто — комикс пропускается.",
-  "_как": "Положить картинки в assets/comic/ и перечислить имена файлов здесь.",
-  "frames": []
+  "_": "Кадры комикса по порядку. Пусто — комикс пропускается.",
+  "_как": "Исходники на зелёнке в assets/source/comic, пересобрать: python3 tools/comic_frames.py",
+  "frames": [
+    "frame1.png",
+    "frame2.png",
+    "frame3.png",
+    "frame4.png",
+    "frame5.png",
+    "frame6.png",
+    "frame7.png",
+    "frame8.png",
+    "frame9.png"
+  ]
 }

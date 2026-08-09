@@ -121,6 +121,7 @@ python3 tools/house_sprites.py assets/sprites smooth    # или pixel
 | `fx_slash.png` | 46×70 | 92×140 | Взмах по струнам |
 | `fx_wave.png` | 28×40 | 56×80 | Звуковая волна |
 | `fx_note.png` | 12×14 | 24×28 | Нотка |
+| `fx_rays.png` | 40×40 | 80×80 | Лучи за бонусом (вращаются, режим ADD) |
 | `fx_spark.png` | 6×6 | 12×12 | Искра золотая |
 | `fx_sparkc.png` | 6×6 | 12×12 | Искра голубая |
 | `fx_flame.png` | 16×16 | 32×32 | Пламя дракона |

@@ -789,6 +789,28 @@ SG.Art = (function () {
     return o;
   }
 
+  /* Лучи за бонусом. Кладутся под предмет и медленно вращаются: сам
+   * медиатор мелкий, летит на уровне головы и теряется на пёстром фоне.
+   * Рисуем через ADD, поэтому центр держим приглушённым — иначе засветка
+   * съест предмет, который стоит поверх. */
+  function rays() {
+    var o = cv(40, 40), g = o.g;
+    var cx = 20, cy = 20;
+    for (var i = 0; i < 12; i++) {
+      var a = (i / 12) * Math.PI * 2;
+      var len = i % 2 ? 12 : 19;
+      var col = i % 2 ? '#a87f1c' : '#f5c542';
+      for (var r = 6; r < len; r++) {
+        var t = 1 - (r - 6) / (len - 6);          // к краю луч сходит на нет
+        var w = Math.max(1, Math.round(1 + t * 2));
+        px(g, cx + Math.cos(a) * r - w / 2, cy + Math.sin(a) * r - w / 2, w, w, col);
+      }
+    }
+    ellipse(g, cx, cy, 7, 7, '#6b5216');
+    ellipse(g, cx, cy, 4, 4, '#8a6a20');
+    return o;
+  }
+
   function spark(col) {
     var o = cv(6, 6), g = o.g;
     px(g, 1, 1, 4, 4, col);
@@ -1448,6 +1470,7 @@ SG.Art = (function () {
     fx_slash:    slash,
     fx_wave:     wave,
     fx_note:     note,
+    fx_rays:     rays,
     fx_spark:    function () { return spark(P.gold); },
     fx_sparkc:   function () { return spark(P.cyan); },
 

@@ -402,13 +402,29 @@ SG.GameScene = new Phaser.Class({
     });
   },
 
+  /* Бонус в оболочке: сам предмет и вращающиеся лучи под ним.
+   *
+   * Лучи нужны, чтобы предмет замечали: он мелкий, летит на уровне головы
+   * и легко теряется на пёстром фоне. Кладём их первыми, поэтому предмет
+   * всегда поверх, а свечение выходит из-за него. */
+  pickupBox: function (key, x, y, depth) {
+    var box = this.add.container(x, y).setDepth(depth === undefined ? 10 : depth);
+    var rays = SG.Art.fit(this.add.image(0, 0, 'fx_rays'), 'fx_rays')
+      .setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.5);
+    var spr = SG.Art.fit(this.add.sprite(0, 0, key), key);
+    box.add([rays, spr]);
+    box.rays = rays;
+    box.spr = spr;
+    box.baseSX = spr.scaleX;
+    box.baseRS = rays.scaleX;
+    return box;
+  },
+
   spawnPickup: function (kind) {
     if (!kind) kind = (this.lives < SG.CFG.run.lives && Math.random() < 0.65) ? 'life' : 'coffee';
     var y = this.G - 118;
-    var spr = this.add.sprite(this.W + 60, y, kind === 'life' ? 'pick_life' : 'pick_coffee')
-      .setOrigin(0.5, 0.5).setDepth(10);
-    SG.Art.fit(spr, spr.texture.key);
-    return this.addEnt({ kind: 'pickup', sub: kind, obj: spr, x: this.W + 60, cy: y, hw: 22, hh: 22, vx: 0, baseY: y, t: 0 });
+    var box = this.pickupBox(kind === 'life' ? 'pick_life' : 'pick_coffee', this.W + 60, y);
+    return this.addEnt({ kind: 'pickup', sub: kind, obj: box, x: this.W + 60, cy: y, hw: 22, hh: 22, vx: 0, baseY: y, t: 0 });
   },
 
   spawnPattern: function () {
@@ -470,7 +486,15 @@ SG.GameScene = new Phaser.Class({
       } else if (e.kind === 'pickup') {
         e.cy = e.baseY + Math.sin(e.t * 3) * 7;
         e.obj.y = e.cy;
-        e.obj.rotation = Math.sin(e.t * 2) * 0.25;
+        var b = e.obj;
+        if (b.rays) {
+          b.rays.rotation += dt * 1.5;
+          b.rays.setAlpha(0.42 + Math.sin(e.t * 5) * 0.18);
+          b.rays.setScale(b.baseRS * (1 + Math.sin(e.t * 5) * 0.09));
+          // разворот как у монетки, но до ребра не доводим:
+          // иначе предмет на мгновение пропадает и его не узнать
+          b.spr.scaleX = b.baseSX * (0.45 + 0.55 * Math.abs(Math.cos(e.t * 2.2)));
+        }
       } else if (e.kind === 'zombie') {
         if (!e.dying) e.obj.setTexture('zombie' + (Math.floor(e.t * 8) % 4));
         if (e.say) { e.say.x = e.x; }
@@ -928,10 +952,7 @@ SG.GameScene = new Phaser.Class({
         // на уровне головы и с щедрым хитбоксом — промахнуться нельзя,
         // иначе вся страховка теряет смысл
         var y = self.G - 72;
-        var spr = self.add.sprite(self.W + 60, y, 'pick_hat')
-          .setOrigin(0.5, 0.5).setDepth(10);
-        SG.Art.fit(spr, 'pick_hat');
-        self.tweens.add({ targets: spr, angle: 12, duration: 500, yoyo: true, repeat: -1 });
+        var spr = self.pickupBox('pick_hat', self.W + 60, y);
         self.addEnt({
           kind: 'pickup', sub: 'hat', obj: spr, x: self.W + 60, cy: y,
           hw: 30, hh: 30, vx: 0, baseY: y, t: 0
@@ -1019,9 +1040,7 @@ SG.GameScene = new Phaser.Class({
       self.time.delayedCall(1400, function () {
         if (self.phase !== 'boss' || self.gift.dragonUsed) return;
         var y = self.G - 75;
-        var spr = self.add.sprite(self.W + 50, y, 'pick_dragon')
-          .setOrigin(0.5, 0.5).setDepth(10);
-        SG.Art.fit(spr, 'pick_dragon');
+        var spr = self.pickupBox('pick_dragon', self.W + 50, y);
         self.addEnt({
           kind: 'pickup', sub: 'dragon', obj: spr, x: self.W + 50, cy: y,
           hw: 30, hh: 30, vx: -170, baseY: y, t: 0

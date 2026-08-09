@@ -74,7 +74,7 @@ SG.GameScene = new Phaser.Class({
     SG.Audio.init();
     SG.Audio.music('run');
 
-    this.banner('ПЯТНИЦА, 18:59', C.intro[1]);
+    this.banner(C.intro[0].replace('. ', ', ').replace(/\.$/, '').toUpperCase(), C.intro[1]);
 
     var self = this;
     this.events.on('shutdown', function () { self.input.keyboard.removeAllListeners(); });

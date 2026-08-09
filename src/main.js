@@ -19,7 +19,8 @@
       expandParent: true
     },
     input: { activePointers: 3 },
-    scene: [SG.BootScene, SG.MenuScene, SG.GameScene, SG.GameOverScene, SG.VictoryScene]
+    scene: [SG.BootScene, SG.MenuScene, SG.ComicScene, SG.GameScene,
+            SG.GameOverScene, SG.VictoryScene]
   });
 
   SG.game = game;

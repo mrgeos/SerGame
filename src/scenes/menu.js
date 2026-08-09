@@ -45,7 +45,9 @@ SG.MenuScene = new Phaser.Class({
       if (self.muteHit && p && p.x > W - 54 && p.y < 44) return;   // не стартуем по кнопке звука
       SG.Audio.init();
       SG.Audio.sfx('select');
-      self.scene.start('Game');
+      // комикс сам отдаст управление игре — и если кадров нет, сделает
+      // это сразу, так что игра остаётся играбельной без картинок
+      self.scene.start(SG.CFG.comic.enabled ? 'Comic' : 'Game');
     };
     this.input.on('pointerdown', go);
     this.input.keyboard.on('keydown-SPACE', go);

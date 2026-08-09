@@ -14,6 +14,7 @@ SG.BootScene = new Phaser.Class({
     // Манифеста может не быть — это нормально, молча идём дальше.
     this.load.on('loaderror', function () {});
     this.load.json('sprite_manifest', 'assets/sprites/manifest.json');
+    this.load.json('comic_manifest', 'assets/comic/manifest.json');
 
     var W = SG.VIEW.W, H = SG.VIEW.H;
     var bar = this.add.rectangle(W / 2, H / 2, 220, 6, 0x3a3556).setOrigin(0.5);
@@ -36,11 +37,19 @@ SG.BootScene = new Phaser.Class({
     var list = (man && Array.isArray(man.sprites)) ? man.sprites : [];
     var use = list.filter(function (key) { return SG.Art.KEYS.indexOf(key) !== -1; });
 
-    if (!use.length) { this.scene.start('Menu'); return; }
+    // кадры комикса: их код-артом не заменить, поэтому чего нет — того нет,
+    // сцена сама пропустит недостающие
+    var comic = this.cache.json.get('comic_manifest');
+    var frames = (comic && Array.isArray(comic.frames)) ? comic.frames : [];
+
+    if (!use.length && !frames.length) { this.scene.start('Menu'); return; }
 
     use.forEach(function (key) {
       self.textures.remove(key);                     // освобождаем ключ под PNG
       self.load.image(key, 'assets/sprites/' + key + '.png');
+    });
+    frames.forEach(function (name, i) {
+      self.load.image('comic' + (i + 1), 'assets/comic/' + name);
     });
     this.load.once('complete', function () {
       SG.Art.build(self);        // что не загрузилось — вернём код-артом

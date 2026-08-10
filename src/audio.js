@@ -79,9 +79,47 @@ SG.Audio = (function () {
       dist.oversample = '2x';
       dist.connect(sfxGain);
 
+      buildBand();
       ready = true;
       if (ctx.state === 'suspended') ctx.resume();
     } catch (e) { ready = false; }
+  }
+
+  /* ---- «состав» под песню ----------------------------------------------
+   *
+   * Ритм-гитара звучит через перегруз общим узлом, а не по ноте: живой
+   * перегруз тем и отличается, что аккорд в нём перемалывается целиком, и
+   * именно от этого получается гитарный рык, а не три отдельные пилы.
+   * За перегрузом фильтр — без него пила режет уши.
+   */
+  var band = null;
+
+  function bus(drive, cut, vol) {
+    var head, tail;
+    if (drive) {
+      head = ctx.createWaveShaper();
+      head.curve = distCurve(drive);
+      head.oversample = '2x';
+    }
+    var f = ctx.createBiquadFilter();
+    f.type = 'lowpass';
+    f.frequency.value = cut;
+    var g = ctx.createGain();
+    g.gain.value = vol;
+    if (head) head.connect(f); else head = f;
+    f.connect(g);
+    g.connect(musicGain);
+    tail = head;
+    return tail;
+  }
+
+  function buildBand() {
+    band = {
+      rhythm: bus(9, 2600, 0.5),      // ритм-гитара: перегруз погрязнее
+      lead:   bus(4, 4400, 0.6),      // соло и вокальная мелодия: помягче
+      bass:   bus(2, 900, 0.8),       // бас: почти чистый, но с телом
+      drums:  bus(0, 12000, 0.9)
+    };
   }
 
   /* ---- примитивы ------------------------------------------------------ */
@@ -259,8 +297,100 @@ SG.Audio = (function () {
     noise({ dur: 0.03, freq: 8000, vol: 0.05, at: time, through: musicGain });
   }
 
+  /* ---- песня из партитуры ------------------------------------------------
+   *
+   * Дорожку можно задать не сеткой аккордов, а готовыми нотами — их
+   * складывает tools/midi_song.py из MIDI. События лежат дельтами по
+   * миллисекундам, поэтому у каждой партии свой курсор: свой номер события
+   * и своё накопленное время.
+   */
+  var SONGS = {};                          // имя дорожки → партитура
+  var PARTS = ['lead', 'rhythm', 'bass', 'drums'];
+  var songAt = 0;                          // когда по часам ctx начался круг
+  var songPos = 0;                         // где встали, мс — чтобы продолжить
+  var songName = null;                     // чьё это место
+  var cur = null;
+  var LOOP_GAP = 700;                      // вдох между кругами
+
+  function songSeek(ms) {
+    var s = SONGS[track];
+    cur = {};
+    for (var p = 0; p < PARTS.length; p++) {
+      var name = PARTS[p], list = s[name] || [], c = { i: 0, t: 0 };
+      while (c.i < list.length && c.t + list[c.i][0] < ms) {
+        c.t += list[c.i][0];
+        c.i++;
+      }
+      cur[name] = c;
+    }
+  }
+
+  function hit(kind, at) {
+    if (kind === 0) {
+      tone({ freq: 132, slideTo: 44, type: 'sine', dur: 0.15, vol: 0.95,
+             at: at, through: band.drums });
+    } else if (kind === 1) {
+      noise({ dur: 0.14, freq: 1800, vol: 0.5, at: at, through: band.drums });
+      tone({ freq: 196, type: 'triangle', dur: 0.08, vol: 0.28,
+             at: at, through: band.drums });
+    } else if (kind === 2) {
+      noise({ dur: 0.035, freq: 9000, vol: 0.14, filter: 'highpass',
+              at: at, through: band.drums });
+    } else if (kind === 3) {
+      tone({ freq: 190, slideTo: 92, type: 'sine', dur: 0.22, vol: 0.5,
+             at: at, through: band.drums });
+    } else {
+      noise({ dur: 0.7, freq: 5200, vol: 0.26, filter: 'highpass',
+              at: at, through: band.drums });
+    }
+  }
+
+  function voice(part, note, ms, at) {
+    var f = hz(note), d = ms / 1000;
+    if (part === 'bass') {
+      tone({ freq: f, type: 'sawtooth', dur: Math.min(d, 0.5), vol: 0.5,
+             at: at, through: band.bass });
+    } else if (part === 'rhythm') {
+      tone({ freq: f, type: 'sawtooth', dur: Math.min(d, 0.45), vol: 0.15,
+             at: at, through: band.rhythm });
+    } else {
+      // мелодию ведут две расстроенные пилы — одна звучит тонко
+      tone({ freq: f, type: 'sawtooth', dur: Math.min(d, 0.9), vol: 0.3,
+             at: at, detune: -7, through: band.lead });
+      tone({ freq: f, type: 'sawtooth', dur: Math.min(d, 0.9), vol: 0.2,
+             at: at, detune: 8, through: band.lead });
+    }
+  }
+
+  function pumpSong() {
+    var s = SONGS[track];
+    var horizon = ctx.currentTime + 0.2;
+
+    for (var p = 0; p < PARTS.length; p++) {
+      var name = PARTS[p], list = s[name] || [], c = cur[name];
+      while (c.i < list.length) {
+        var e = list[c.i];
+        var t = c.t + e[0];
+        var when = songAt + t / 1000;
+        if (when > horizon) break;
+        c.t = t; c.i++;
+        var at = Math.max(0, when - ctx.currentTime);
+        if (name === 'drums') hit(e[1], at);
+        else voice(name, e[1], e[2], at);
+      }
+    }
+
+    songPos = (ctx.currentTime - songAt) * 1000;
+    if (songPos > s.ms + LOOP_GAP) {       // круг закончился — заходим снова
+      songAt = ctx.currentTime;
+      songPos = 0;
+      songSeek(0);
+    }
+  }
+
   function pump() {
     if (!ready || !ctx) return;
+    if (SONGS[track]) { pumpSong(); return; }
     var spb = 60 / tempo / 2;              // длительность шестнадцатой
     while (nextTime < ctx.currentTime + 0.14) {
       scheduleStep(Math.max(0, nextTime - ctx.currentTime));
@@ -276,15 +406,31 @@ SG.Audio = (function () {
     sfx: function (name) { if (ready && SFX[name]) { try { SFX[name](); } catch (e) {} } },
     chord: function () { try { chord(); } catch (e) {} },
 
+    /* Партитура из MIDI (см. tools/midi_song.py). Кладётся по имени
+     * дорожки и подменяет собой её сетку аккордов; не положили — играет
+     * прежний чиптюн, так что без файла ничего не ломается. */
+    setSong: function (which, data) {
+      if (data && data.ms) SONGS[which] = data;
+    },
+
     music: function (which) {
       if (!ready) return;
-      var next = TRACKS[which] ? which : 'run';
-      if (next !== track) step = 0;        // новая тема — с начала фразы
+      var next = (TRACKS[which] || SONGS[which]) ? which : 'run';
+      var changed = next !== track;
+      if (changed) step = 0;
       track = next;
-      tempo = TRACKS[track].tempo;
+      tempo = (TRACKS[track] || TRACKS.run).tempo;
+
+      if (SONGS[track]) {
+        // после босса забег продолжается с того же места песни, а не
+        // с первого такта — иначе вступление звучит второй раз
+        if (songName !== track) { songName = track; songPos = 0; }
+        songAt = ctx.currentTime + 0.08 - songPos / 1000;
+        songSeek(songPos);
+      } else if (changed || !timer) {
+        nextTime = ctx.currentTime + 0.05;
+      }
       if (timer) return;
-      step = 0;
-      nextTime = ctx.currentTime + 0.05;
       timer = setInterval(pump, 25);
     },
 

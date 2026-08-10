@@ -17,6 +17,8 @@ SG.BootScene = new Phaser.Class({
     this.load.json('comic_manifest', 'assets/comic/manifest.json');
     // постер титульного экрана; не загрузится — меню нарисует себя само
     this.load.image('title', 'assets/title.jpg');
+    // партитура забеговой темы; не загрузится — сыграет прежний чиптюн
+    this.load.json('song_run', 'assets/music/run.json');
 
     var W = SG.VIEW.W, H = SG.VIEW.H;
     var bar = this.add.rectangle(W / 2, H / 2, 220, 6, 0x3a3556).setOrigin(0.5);
@@ -34,6 +36,8 @@ SG.BootScene = new Phaser.Class({
     // Сначала всегда рисуем код-арт: отсюда берутся эталонные размеры,
     // под которые потом подгоняются подменяющие картинки.
     SG.Art.build(this);
+
+    SG.Audio.setSong('run', this.cache.json.get('song_run'));
 
     var man = this.cache.json.get('sprite_manifest');
     var list = (man && Array.isArray(man.sprites)) ? man.sprites : [];
